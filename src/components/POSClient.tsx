@@ -17,11 +17,13 @@ import {
   Check,
   Sun,
   Moon,
+  User as UserIcon,
 } from 'lucide-react';
 import { Product, CartItem } from '@/types/pos';
+import { MOCK_POS_USERS, POSUser } from '@/types/user';
 import ReceiptModal from '@/components/ReceiptModal';
+import LoginModal from '@/components/LoginModal';
 
-// Helper component to highlight search terms in product names (matches screenshot yellow background)
 function HighlightText({ text, query, isDark }: { text: string; query: string; isDark: boolean }) {
   if (!query.trim()) return <span>{text}</span>;
 
@@ -48,22 +50,20 @@ function HighlightText({ text, query, isDark }: { text: string; query: string; i
 }
 
 export default function POSClient() {
+  const [currentUser, setCurrentUser] = useState<POSUser | null>(MOCK_POS_USERS[0]); // Default Lia Kasir
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+
   const [products, setProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Semua');
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Theme Mode State (Light vs Dark)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-
-  // Mode States
   const [isGrosirMode, setIsGrosirMode] = useState(false);
 
-  // Cart & Transaction States
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cashPaid, setCashPaid] = useState<number | ''>('');
-  const [cashierName] = useState('Lia');
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -72,7 +72,6 @@ export default function POSClient() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  // Fetch Products
   const fetchProducts = async (query = '', showRefreshAnimation = false) => {
     if (showRefreshAnimation) setIsRefreshing(true);
     else setIsLoading(true);
@@ -95,7 +94,6 @@ export default function POSClient() {
     fetchProducts(searchQuery);
   }, [searchQuery]);
 
-  // Keyboard Shortcuts (F2 for Search, F4 for Grosir, F9 for Receipt)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F2') {
@@ -118,12 +116,10 @@ export default function POSClient() {
     fetchProducts(searchQuery);
   };
 
-  // Switch Grosir Request Mode
   const handleToggleGrosir = () => {
     const nextGrosirState = !isGrosirMode;
     setIsGrosirMode(nextGrosirState);
 
-    // Recalculate price in cart automatically
     setCart((prevCart) =>
       prevCart.map((item) => {
         let price = item.product.priceRetail;
@@ -151,7 +147,6 @@ export default function POSClient() {
     );
   };
 
-  // Add product to cart
   const addToCart = (product: Product) => {
     setCart((prevCart) => {
       const existingIndex = prevCart.findIndex((i) => i.product.id === product.id);
@@ -200,7 +195,6 @@ export default function POSClient() {
     });
   };
 
-  // Update Cart Quantity
   const updateQty = (index: number, delta: number) => {
     setCart((prevCart) => {
       const updated = [...prevCart];
@@ -242,7 +236,6 @@ export default function POSClient() {
     setCart((prevCart) => prevCart.filter((_, i) => i !== index));
   };
 
-  // Calculations
   const grandTotal = cart.reduce((sum, item) => sum + item.selectedPrice * item.quantity, 0);
   const totalItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const numPaid = typeof cashPaid === 'number' ? cashPaid : 0;
@@ -258,7 +251,6 @@ export default function POSClient() {
   };
 
   const categories = ['Semua', 'Coffee Grinder', 'Mug Enamel', 'Teapot', 'Peralatan Masak'];
-
   const isDark = theme === 'dark';
 
   return (
@@ -289,54 +281,30 @@ export default function POSClient() {
                 </span>
               </h1>
               <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                Panglima Sudirman 65 • Kasir: <span className="text-emerald-500 font-semibold">{cashierName}</span>
+                Panglima Sudirman 65 • Kasir:{' '}
+                <span className="text-emerald-500 font-extrabold">
+                  {currentUser ? currentUser.name : 'Belum Login'}
+                </span>
               </p>
             </div>
           </div>
 
           <div className={`h-6 w-px hidden md:block ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
 
-          {/* Mode Switch Status */}
-          <div className="flex items-center gap-3">
-            <div
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 border transition-all ${
-                isGrosirMode
-                  ? 'bg-amber-500/10 text-amber-500 border-amber-500/30'
-                  : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/25'
-              }`}
-            >
-              <Tag className="w-3.5 h-3.5" />
-              {isGrosirMode ? 'Mode Grosir Active' : 'Mode Retail Active'}
-            </div>
-
-            {/* Preview Struk Button */}
+          {/* User Profile & Switch Account Button */}
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => setIsReceiptOpen(true)}
-              className={`px-3.5 py-1.5 rounded-xl active:scale-95 border transition-all flex items-center gap-2 text-xs font-semibold group ${
-                isDark
-                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
-              }`}
-              title="Preview Struk Nota (F9)"
+              onClick={() => setIsLoginOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 hover:bg-emerald-500/25 transition-all"
             >
-              <Receipt className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition-transform" />
-              <span>Preview Nota</span>
-              <kbd
-                className={`hidden lg:inline px-1.5 py-0.5 text-[10px] rounded border ${
-                  isDark
-                    ? 'bg-slate-950 text-slate-400 border-slate-800'
-                    : 'bg-white text-slate-500 border-slate-200'
-                }`}
-              >
-                F9
-              </kbd>
+              <UserIcon className="w-3.5 h-3.5" />
+              <span>Ganti Kasir ({currentUser?.username || 'Login'})</span>
             </button>
           </div>
         </div>
 
-        {/* Right Tools: Theme Switch, Refresh Data & Grosir Toggle */}
+        {/* Right Tools */}
         <div className="flex items-center gap-4">
-          {/* Light / Dark Mode Toggle Button */}
           <button
             onClick={toggleTheme}
             className={`p-2 rounded-xl border transition-all flex items-center gap-2 text-xs font-semibold active:scale-95 ${
@@ -344,13 +312,11 @@ export default function POSClient() {
                 ? 'bg-slate-800 hover:bg-slate-700 text-amber-400 border-slate-700'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
             }`}
-            title="Ganti Mode Tampilan Light / Dark"
           >
             {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-600" />}
             <span className="hidden sm:inline">{isDark ? 'Light Mode' : 'Dark Mode'}</span>
           </button>
 
-          {/* Refresh Data Button */}
           <button
             onClick={() => fetchProducts(searchQuery, true)}
             disabled={isRefreshing}
@@ -359,13 +325,11 @@ export default function POSClient() {
                 ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
             }`}
-            title="Update Data Terbaru dari Database Master"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-sky-500 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>Refresh Data</span>
           </button>
 
-          {/* Switch Grosir Request */}
           <div
             className={`flex items-center gap-3 py-1.5 px-3.5 rounded-2xl border ${
               isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
@@ -394,11 +358,10 @@ export default function POSClient() {
         </div>
       </header>
 
-      {/* 📦 MAIN CONTENT DASHBOARD */}
+      {/* MAIN CONTENT */}
       <div className="flex-1 flex overflow-hidden">
-        {/* 🔍 LEFT PANEL: CATALOG & LIVE TABLE */}
+        {/* LEFT PANEL */}
         <div className={`flex-1 flex flex-col min-w-0 ${isDark ? 'bg-[#070b14]' : 'bg-slate-50'}`}>
-          {/* Top Search & Filter Bar */}
           <div
             className={`p-4 border-b flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 ${
               isDark ? 'border-slate-800/80 bg-slate-900/40' : 'border-slate-200 bg-white'
@@ -426,7 +389,6 @@ export default function POSClient() {
               </button>
             </form>
 
-            {/* Quick Category Filters */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
               {categories.map((cat) => (
                 <button
@@ -446,7 +408,6 @@ export default function POSClient() {
             </div>
           </div>
 
-          {/* Product Data Table */}
           <div className="flex-1 overflow-auto p-4">
             <div
               className={`rounded-2xl border overflow-hidden shadow-xl ${
@@ -462,13 +423,14 @@ export default function POSClient() {
                         : 'bg-slate-100 border-slate-200 text-slate-600'
                     }`}
                   >
-                    <th className="py-3.5 px-4">Nama Barang</th>
-                    <th className="py-3.5 px-4">Barcode</th>
-                    <th className="py-3.5 px-4 text-right">Harga Retail</th>
-                    <th className="py-3.5 px-4 text-center">Stok</th>
-                    <th className="py-3.5 px-4 text-right text-amber-500">Grosir 1</th>
-                    <th className="py-3.5 px-4 text-right text-amber-500">Grosir 2</th>
-                    <th className="py-3.5 px-4 text-center">Aksi</th>
+                    <th className="py-3.5 px-3">Nama Barang</th>
+                    <th className="py-3.5 px-3">Barcode</th>
+                    <th className="py-3.5 px-3 text-right">Harga Retail</th>
+                    <th className="py-3.5 px-3 text-center">Stok</th>
+                    <th className="py-3.5 px-3 text-right text-amber-500">Grosir 1</th>
+                    <th className="py-3.5 px-3 text-right text-amber-500">Grosir 2</th>
+                    <th className="py-3.5 px-3 text-right text-amber-500">Grosir 3</th>
+                    <th className="py-3.5 px-3 text-center">Aksi</th>
                   </tr>
                 </thead>
                 <tbody
@@ -478,14 +440,14 @@ export default function POSClient() {
                 >
                   {isLoading ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-20 text-slate-500">
+                      <td colSpan={8} className="text-center py-20 text-slate-500">
                         <RefreshCw className="w-7 h-7 animate-spin mx-auto mb-2 text-emerald-500" />
                         Sedang menyinkronkan katalog barang...
                       </td>
                     </tr>
                   ) : products.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-20 text-slate-500">
+                      <td colSpan={8} className="text-center py-20 text-slate-500">
                         Barang tidak ditemukan.
                       </td>
                     </tr>
@@ -505,27 +467,26 @@ export default function POSClient() {
                               : 'hover:bg-slate-50 text-slate-800'
                           }`}
                         >
-                          {/* Highlight search keyword */}
-                          <td className="py-3.5 px-4 font-semibold">
+                          <td className="py-3.5 px-3 font-semibold">
                             <HighlightText text={product.name} query={searchQuery} isDark={isDark} />
                           </td>
                           <td
-                            className={`py-3.5 px-4 font-mono text-[11px] ${
+                            className={`py-3.5 px-3 font-mono text-[11px] ${
                               isDark ? 'text-slate-400' : 'text-slate-500'
                             }`}
                           >
                             {product.barcode}
                           </td>
                           <td
-                            className={`py-3.5 px-4 text-right font-extrabold ${
+                            className={`py-3.5 px-3 text-right font-extrabold ${
                               isDark ? 'text-white' : 'text-slate-900'
                             }`}
                           >
                             Rp {product.priceRetail.toLocaleString('id-ID')}
                           </td>
-                          <td className="py-3.5 px-4 text-center">
+                          <td className="py-3.5 px-3 text-center">
                             <span
-                              className={`px-2.5 py-0.5 rounded-md font-bold text-[11px] inline-block min-w-[28px] ${
+                              className={`px-2 py-0.5 rounded-md font-bold text-[11px] inline-block min-w-[28px] ${
                                 isOutOfStock
                                   ? 'bg-rose-500/20 text-rose-500 border border-rose-500/30'
                                   : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
@@ -534,17 +495,20 @@ export default function POSClient() {
                               {product.stock}
                             </span>
                           </td>
-                          <td className="py-3.5 px-4 text-right text-amber-500 font-mono font-medium">
+                          <td className="py-3.5 px-3 text-right text-amber-500 font-mono font-medium">
                             Rp {product.priceGrosir1.toLocaleString('id-ID')}
                           </td>
-                          <td className="py-3.5 px-4 text-right text-amber-500 font-mono font-medium">
+                          <td className="py-3.5 px-3 text-right text-amber-500 font-mono font-medium">
                             Rp {product.priceGrosir2.toLocaleString('id-ID')}
                           </td>
-                          <td className="py-3.5 px-4 text-center">
+                          <td className="py-3.5 px-3 text-right text-amber-500 font-mono font-medium">
+                            Rp {product.priceGrosir3.toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-3.5 px-3 text-center">
                             <button
                               onClick={() => addToCart(product)}
                               disabled={isOutOfStock}
-                              className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-sm flex items-center gap-1 mx-auto"
+                              className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-sm flex items-center gap-1 mx-auto"
                             >
                               <Plus className="w-3.5 h-3.5" />
                               Pilih
@@ -560,7 +524,7 @@ export default function POSClient() {
           </div>
         </div>
 
-        {/* 🛒 RIGHT PANEL: SHOPPING CART TERMINAL */}
+        {/* RIGHT PANEL */}
         <div
           className={`w-[440px] flex flex-col border-l shadow-2xl shrink-0 transition-colors ${
             isDark
@@ -568,7 +532,6 @@ export default function POSClient() {
               : 'bg-white border-slate-200'
           }`}
         >
-          {/* Cart Header */}
           <div
             className={`p-4 border-b flex items-center justify-between ${
               isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'
@@ -577,7 +540,7 @@ export default function POSClient() {
             <div className="flex items-center gap-2">
               <ShoppingCart className="w-5 h-5 text-emerald-500" />
               <h2 className={`font-bold text-base ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                Keranjang Kasir
+                Keranjang Kasir ({currentUser?.name || 'Kasir'})
               </h2>
             </div>
             <span className="text-xs px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 font-extrabold border border-emerald-500/30">
@@ -585,7 +548,6 @@ export default function POSClient() {
             </span>
           </div>
 
-          {/* Cart Items List */}
           <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
             {cart.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center p-6 space-y-3">
@@ -644,7 +606,6 @@ export default function POSClient() {
                       )}
                     </div>
 
-                    {/* Quantity Controller */}
                     <div
                       className={`flex items-center gap-2 p-1 rounded-lg border ${
                         isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
@@ -676,7 +637,6 @@ export default function POSClient() {
             )}
           </div>
 
-          {/* 💵 PAYMENT SUMMARY SECTION */}
           <div
             className={`p-5 border-t space-y-4 ${
               isDark ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'
@@ -695,7 +655,6 @@ export default function POSClient() {
               </div>
             </div>
 
-            {/* Quick Cash Nominal Buttons */}
             <div className="space-y-1.5">
               <span className={`text-[11px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Uang Cepat:</span>
               <div className="grid grid-cols-4 gap-1.5">
@@ -735,7 +694,6 @@ export default function POSClient() {
               </div>
             </div>
 
-            {/* Input Cash Paid */}
             <div className="space-y-1.5">
               <label className={`text-xs font-semibold flex items-center justify-between ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                 <span className="flex items-center gap-1.5">
@@ -761,7 +719,6 @@ export default function POSClient() {
               />
             </div>
 
-            {/* Kembalian Info Display */}
             <div
               className={`flex justify-between items-center text-xs p-3 rounded-xl border ${
                 isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200'
@@ -773,7 +730,6 @@ export default function POSClient() {
               </span>
             </div>
 
-            {/* Action Buttons */}
             <div className="grid grid-cols-2 gap-2 pt-1">
               <button
                 onClick={() => setIsReceiptOpen(true)}
@@ -800,14 +756,21 @@ export default function POSClient() {
         </div>
       </div>
 
-      {/* 🧾 RECEIPT MODAL PREVIEW */}
       <ReceiptModal
         isOpen={isReceiptOpen}
         onClose={() => setIsReceiptOpen(false)}
         cart={cart}
-        cashierName={cashierName}
+        cashierName={currentUser?.name || 'Kasir'}
         cashPaid={numPaid}
         invoiceNo="INV-001"
+      />
+
+      <LoginModal
+        isOpen={isLoginOpen}
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+          setIsLoginOpen(false);
+        }}
       />
     </div>
   );
