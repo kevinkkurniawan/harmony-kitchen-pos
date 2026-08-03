@@ -1,26 +1,68 @@
 import { NextResponse } from 'next/server';
-import { MOCK_PRODUCTS } from '@/data/mockProducts';
+import { prisma } from '@/lib/db';
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const query = searchParams.get('q')?.toLowerCase() || '';
+  try {
+    const { searchParams } = new URL(request.url);
+    const query = searchParams.get('q')?.toLowerCase() || '';
+    const category = searchParams.get('category') || '';
 
-  let filtered = MOCK_PRODUCTS;
+    const whereCondition: any = {};
 
-  if (query) {
-    filtered = MOCK_PRODUCTS.filter(
-      (p) =>
-        p.name.toLowerCase().includes(query) ||
-        p.barcode.includes(query)
+    if (category && category !== 'Semua') {
+      whereCondition.category = category;
+    }
+
+    if (query) {
+      whereCondition.OR = [
+        { name: { contains: query, mode: 'insensitive' } },
+        { barcode: { contains: query } },
+        { category: { contains: query, mode: 'insensitive' } },
+      ];
+    }
+
+    const products = await prisma.product.findMany({
+      where: whereCondition,
+      orderBy: { name: 'asc' },
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: products,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    console.error('Failed to fetch products from PostgreSQL:', err);
+    return NextResponse.json(
+      { success: false, error: err.message || 'Database error' },
+      { status: 500 }
     );
   }
+}
 
-  // Simulate network latency for refresh demo
-  await new Promise((resolve) => setTimeout(resolve, 300));
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const newProduct = await prisma.product.create({
+      data: {
+        barcode: body.barcode,
+        name: body.name,
+        category: body.category || 'General',
+        uom: body.uom || 'Pcs',
+        priceRetail: Number(body.priceRetail),
+        stock: Number(body.stock || 0),
+        priceGrosir1: Number(body.priceGrosir1 || body.priceRetail),
+        priceGrosir2: Number(body.priceGrosir2 || body.priceRetail),
+        priceGrosir3: Number(body.priceGrosir3 || body.priceRetail),
+        printerTarget: body.printerTarget || 'Kitchen',
+      },
+    });
 
-  return NextResponse.json({
-    success: true,
-    data: filtered,
-    updatedAt: new Date().toISOString(),
-  });
+    return NextResponse.json({ success: true, data: newProduct });
+  } catch (err: any) {
+    return NextResponse.json(
+      { success: false, error: err.message || 'Failed to create product' },
+      { status: 500 }
+    );
+  }
 }

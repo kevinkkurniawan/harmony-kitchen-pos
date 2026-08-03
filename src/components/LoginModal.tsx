@@ -1,15 +1,23 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Store, Lock, User as UserIcon, LogIn, AlertCircle } from 'lucide-react';
+import { Store, Lock, User as UserIcon, LogIn, AlertCircle, X } from 'lucide-react';
 import { MOCK_POS_USERS, POSUser } from '@/types/user';
 
 interface LoginModalProps {
   isOpen: boolean;
-  onLoginSuccess: (user: POSUser) => void;
+  onClose?: () => void;
+  onSelectUser?: (user: POSUser) => void;
+  onLoginSuccess?: (user: POSUser) => void;
+  currentUsername?: string;
 }
 
-export default function LoginModal({ isOpen, onLoginSuccess }: LoginModalProps) {
+export default function LoginModal({
+  isOpen,
+  onClose,
+  onSelectUser,
+  onLoginSuccess,
+}: LoginModalProps) {
   const [username, setUsername] = useState('lia');
   const [password, setPassword] = useState('123456');
   const [error, setError] = useState('');
@@ -20,62 +28,62 @@ export default function LoginModal({ isOpen, onLoginSuccess }: LoginModalProps) 
     e.preventDefault();
     setError('');
 
-    const foundUser = MOCK_POS_USERS.find((u) => u.username.toLowerCase() === username.toLowerCase());
+    const foundUser = MOCK_POS_USERS.find(
+      (u) => u.username.toLowerCase() === username.toLowerCase()
+    );
 
     if (!foundUser) {
       setError('Username kasir tidak ditemukan');
       return;
     }
 
-    onLoginSuccess(foundUser);
+    if (onSelectUser) onSelectUser(foundUser);
+    if (onLoginSuccess) onLoginSuccess(foundUser);
+    if (onClose) onClose();
+  };
+
+  const handleQuickSelect = (user: POSUser) => {
+    if (onSelectUser) onSelectUser(user);
+    if (onLoginSuccess) onLoginSuccess(user);
+    if (onClose) onClose();
   };
 
   return (
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-800 text-slate-100 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+      <div className="bg-slate-900 border border-slate-800 text-slate-100 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden relative">
+        {/* Close button if onClose is passed */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="absolute right-4 top-4 p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors z-10"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+
         {/* Header */}
         <div className="p-6 bg-slate-950/80 border-b border-slate-800 text-center">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center mx-auto mb-3 shadow-lg shadow-emerald-500/20">
             <Store className="w-6 h-6 text-slate-950 font-bold" />
           </div>
-          <h2 className="font-extrabold text-lg text-white">Login Kasir POS</h2>
+          <h2 className="font-extrabold text-lg text-white">Login / Ganti Kasir POS</h2>
           <p className="text-xs text-slate-400 mt-1">Masukan Akun Kasir Harmony Kitchenware</p>
         </div>
 
         {/* Quick Demo Login Preset Buttons */}
         <div className="p-4 bg-slate-900/60 border-b border-slate-800 text-xs">
-          <span className="text-slate-400 block mb-2 font-medium">Pilih Akun Kasir:</span>
+          <span className="text-slate-400 block mb-2 font-medium">Pilih Akun Kasir Langsung:</span>
           <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setUsername('lia');
-                setPassword('123456');
-              }}
-              className="px-2 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg text-center font-bold hover:bg-emerald-500/30 transition-all"
-            >
-              Kasir Lia
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setUsername('linda');
-                setPassword('123456');
-              }}
-              className="px-2 py-1.5 bg-sky-500/20 text-sky-300 border border-sky-500/30 rounded-lg text-center font-bold hover:bg-sky-500/30 transition-all"
-            >
-              Kasir Linda
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setUsername('sulis');
-                setPassword('123456');
-              }}
-              className="px-2 py-1.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-center font-bold hover:bg-amber-500/30 transition-all"
-            >
-              Kasir Sulis
-            </button>
+            {MOCK_POS_USERS.map((user) => (
+              <button
+                key={user.id}
+                type="button"
+                onClick={() => handleQuickSelect(user)}
+                className="px-2 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg text-center font-bold hover:bg-emerald-500/30 transition-all text-xs"
+              >
+                {user.name}
+              </button>
+            ))}
           </div>
         </div>
 

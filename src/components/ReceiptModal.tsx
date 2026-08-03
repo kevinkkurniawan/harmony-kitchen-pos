@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Printer, X } from 'lucide-react';
-import { CartItem } from '@/types/pos';
+import { CartItem, Customer } from '@/types/pos';
 
 interface ReceiptModalProps {
   isOpen: boolean;
@@ -11,6 +11,11 @@ interface ReceiptModalProps {
   cashierName: string;
   cashPaid: number;
   invoiceNo: string;
+  orderType?: string;
+  customer?: Customer | null;
+  paymentMethod?: string;
+  discountAmount?: number;
+  notes?: string;
 }
 
 export default function ReceiptModal({
@@ -20,16 +25,21 @@ export default function ReceiptModal({
   cashierName,
   cashPaid,
   invoiceNo,
+  customer,
+  paymentMethod = 'Tunai',
+  discountAmount = 0,
 }: ReceiptModalProps) {
   if (!isOpen) return null;
 
-  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const totalKinds = cart.length;
-  const grandTotal = cart.reduce((sum, item) => sum + item.selectedPrice * item.quantity, 0);
+  const validCart = cart.filter((item) => !item.isVoided);
+  const totalKinds = validCart.length;
+  const rawSubtotal = validCart.reduce((sum, item) => sum + item.selectedPrice * item.quantity, 0);
+  const grandTotal = Math.max(0, rawSubtotal - discountAmount);
   const change = Math.max(0, cashPaid - grandTotal);
 
   const currentDate = new Date();
   const dateStr = currentDate.toLocaleDateString('id-ID', {
+    day: '2-digit',
     month: 'short',
     year: 'numeric',
   });
@@ -50,7 +60,7 @@ export default function ReceiptModal({
         <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between no-print">
           <div className="flex items-center gap-2">
             <Printer className="w-5 h-5 text-emerald-400" />
-            <h3 className="font-semibold text-lg">Preview Nota Pembelian</h3>
+            <h3 className="font-semibold text-lg">Preview Nota Pembelian POS</h3>
           </div>
           <button
             onClick={onClose}
@@ -60,7 +70,7 @@ export default function ReceiptModal({
           </button>
         </div>
 
-        {/* Modal Body / Receipt View (Matches Thermal Receipt Print Layout) */}
+        {/* Modal Body / Thermal Receipt View (Matches exact POS repo format) */}
         <div className="p-6 overflow-y-auto font-mono text-sm leading-tight select-none bg-slate-50 flex-1 border-b border-slate-200">
           <div className="bg-white p-6 shadow-xs rounded-xl border border-slate-200 max-w-[320px] mx-auto receipt-paper">
             {/* Header Nota */}
@@ -73,10 +83,20 @@ export default function ReceiptModal({
             </div>
 
             {/* Sub Header Nota */}
-            <div className="py-2 border-b border-dashed border-slate-400 text-xs flex justify-between text-slate-700">
-              <span>{dateStr}</span>
-              <span>{timeStr}</span>
-              <span>Ksr: {cashierName}</span>
+            <div className="py-2 border-b border-dashed border-slate-400 text-[11px] space-y-1 text-slate-700">
+              <div className="flex justify-between">
+                <span>No: {invoiceNo || 'INV-LOCAL'}</span>
+                <span>{dateStr} {timeStr}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Kasir: {cashierName}</span>
+                <span>Metode: <strong className="uppercase">{paymentMethod}</strong></span>
+              </div>
+              {customer && (
+                <div className="text-blue-600 font-bold">
+                  Pelanggan: {customer.name} ({customer.customerType})
+                </div>
+              )}
             </div>
 
             {/* Items Header */}
@@ -87,12 +107,12 @@ export default function ReceiptModal({
 
             {/* Items List */}
             <div className="py-2 border-b border-dashed border-slate-400 space-y-2 text-xs">
-              {cart.length === 0 ? (
+              {validCart.length === 0 ? (
                 <div className="text-center py-4 text-slate-400 italic font-sans">
-                  (Belum ada item dipilih)
+                  (Belum ada item)
                 </div>
               ) : (
-                cart.map((item, idx) => (
+                validCart.map((item, idx) => (
                   <div key={idx} className="flex flex-col">
                     <div className="flex justify-between items-start font-medium text-slate-900">
                       <span className="flex-1 pr-2 break-words">
@@ -102,9 +122,17 @@ export default function ReceiptModal({
                         {(item.selectedPrice * item.quantity).toLocaleString('id-ID')}
                       </span>
                     </div>
-                    <div className="text-slate-500 text-[11px] pl-4">
-                      @ {item.selectedPrice.toLocaleString('id-ID')}
+                    <div className="flex justify-between text-slate-500 text-[11px] pl-4">
+                      <span>@ {item.selectedPrice.toLocaleString('id-ID')} ({item.product.uom})</span>
+                      <span className="text-[10px] uppercase font-bold text-amber-600">
+                        [{item.priceType}]
+                      </span>
                     </div>
+                    {item.memo && (
+                      <div className="text-[11px] text-slate-600 font-sans italic pl-4">
+                        * Catatan: {item.memo}
+                      </div>
+                    )}
                   </div>
                 ))
               )}
@@ -113,27 +141,48 @@ export default function ReceiptModal({
             {/* Summary Details */}
             <div className="py-3 border-b border-dashed border-slate-400 space-y-1 text-xs">
               <div className="flex justify-between">
-                <span>{totalKinds} Jenis</span>
+                <span>{totalKinds} Jenis Item</span>
                 <div className="flex gap-4">
-                  <span className="font-bold text-slate-700">Total :</span>
+                  <span className="text-slate-600">Subtotal:</span>
                   <span className="font-bold text-slate-900">
-                    {grandTotal.toLocaleString('id-ID')}
+                    {rawSubtotal.toLocaleString('id-ID')}
                   </span>
                 </div>
               </div>
+
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-rose-600">
+                  <span></span>
+                  <div className="flex gap-4">
+                    <span>Diskon:</span>
+                    <span className="font-bold">
+                      - {discountAmount.toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-between pt-1 border-t border-slate-200">
+                <span>Total :</span>
+                <span className="font-bold text-slate-900 text-sm">
+                  {grandTotal.toLocaleString('id-ID')}
+                </span>
+              </div>
+
               <div className="flex justify-between">
                 <span></span>
-                <div className="flex gap-4">
-                  <span className="text-slate-600">Jumlah Bayar :</span>
+                <div className="flex gap-4 text-slate-600">
+                  <span>Jumlah Bayar :</span>
                   <span className="font-bold text-slate-900">
                     {cashPaid.toLocaleString('id-ID')}
                   </span>
                 </div>
               </div>
+
               <div className="flex justify-between">
                 <span></span>
-                <div className="flex gap-4">
-                  <span className="text-slate-600">Kembali :</span>
+                <div className="flex gap-4 text-slate-600">
+                  <span>Kembali :</span>
                   <span className="font-bold text-slate-900">
                     {change.toLocaleString('id-ID')}
                   </span>
@@ -141,7 +190,7 @@ export default function ReceiptModal({
               </div>
             </div>
 
-            {/* Footer Nota */}
+            {/* Footer Nota (Matches POS repo) */}
             <div className="pt-4 text-center text-[10px] text-slate-600 space-y-1 font-sans">
               <p className="font-semibold uppercase tracking-wider text-slate-800">
                 BARANG YANG SUDAH DIBELI
@@ -168,10 +217,10 @@ export default function ReceiptModal({
           </button>
           <button
             onClick={handlePrint}
-            className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all active:scale-95"
+            className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all active:scale-95"
           >
             <Printer className="w-4 h-4" />
-            Cetak Nota
+            Cetak Nota Struk
           </button>
         </div>
       </div>

@@ -18,11 +18,28 @@ import {
   Sun,
   Moon,
   User as UserIcon,
+  UserCheck,
+  FileText,
+  TrendingUp,
+  ShieldAlert,
+  SlidersHorizontal,
+  DollarSign,
+  QrCode,
+  Sparkles,
+  Settings,
+  Calculator,
+  Database,
+  Repeat,
 } from 'lucide-react';
-import { Product, CartItem } from '@/types/pos';
+import { Product, CartItem, Customer, ShiftSummary } from '@/types/pos';
 import { MOCK_POS_USERS, POSUser } from '@/types/user';
 import ReceiptModal from '@/components/ReceiptModal';
 import LoginModal from '@/components/LoginModal';
+import ItemMemoModal from '@/components/ItemMemoModal';
+import VoidReasonModal from '@/components/VoidReasonModal';
+import MemberValidationModal from '@/components/MemberValidationModal';
+import CashierSummaryModal from '@/components/CashierSummaryModal';
+import SettingsModal from '@/components/SettingsModal';
 
 function HighlightText({ text, query, isDark }: { text: string; query: string; isDark: boolean }) {
   if (!query.trim()) return <span>{text}</span>;
@@ -60,11 +77,39 @@ export default function POSClient() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [isGrosirMode, setIsGrosirMode] = useState(false);
+  const [isGrosirMode, setIsGrosirMode] = useState(false); // Mode Retail vs Mode Grosir (matches POS repo Frm_Input)
+  const [showTouchNumpad, setShowTouchNumpad] = useState(false);
+
+  // Customer & Payment States (matches Frm_Input in POS repo)
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'QRIS' | 'DebitCard' | 'CreditCard' | 'Bon'>('Cash');
+  const [voucherCode, setVoucherCode] = useState('');
+
+  // POS Settings state (Frm_ChangeSetting)
+  const [posSettings, setPosSettings] = useState({
+    storeName: 'Harmony Kitchenware',
+    storeAddress: 'Jl. Panglima Sudirman No. 65',
+    storePhone: '0851 7238 4707',
+    receiptFooter: 'Terima kasih atas kunjungan Anda!',
+    taxPercent: 0,
+    servicePercent: 0,
+    printerCashier: 'EPSON TM-T82 Thermal',
+    printerKitchen: 'EPSON TM-U220 Dapur',
+    printerBar: 'EPSON TM-U220 Bar',
+    printerPantry: 'EPSON LX-300+II Pantry',
+  });
+
+  // Modals state
+  const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
+  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [memoItem, setMemoItem] = useState<CartItem | null>(null);
+  const [voidItem, setVoidItem] = useState<CartItem | null>(null);
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cashPaid, setCashPaid] = useState<number | ''>('');
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
+  const [lastInvoiceNo, setLastInvoiceNo] = useState('');
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -72,18 +117,18 @@ export default function POSClient() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  const fetchProducts = async (query = '', showRefreshAnimation = false) => {
+  const fetchProducts = async (query = '', category = 'Semua', showRefreshAnimation = false) => {
     if (showRefreshAnimation) setIsRefreshing(true);
     else setIsLoading(true);
 
     try {
-      const res = await fetch(`/api/products?q=${encodeURIComponent(query)}`);
+      const res = await fetch(`/api/products?q=${encodeURIComponent(query)}&category=${encodeURIComponent(category)}`);
       const json = await res.json();
       if (json.success) {
         setProducts(json.data);
       }
     } catch (err) {
-      console.error('Failed to fetch products:', err);
+      console.error('Failed to fetch products from PostgreSQL API:', err);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -91,9 +136,10 @@ export default function POSClient() {
   };
 
   useEffect(() => {
-    fetchProducts(searchQuery);
-  }, [searchQuery]);
+    fetchProducts(searchQuery, selectedCategory);
+  }, [searchQuery, selectedCategory]);
 
+  // Global Keyboard Shortcuts (F2, F4, F8, F9, F10, Esc) - Matches POS.exe
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F2') {
@@ -102,19 +148,26 @@ export default function POSClient() {
       } else if (e.key === 'F4') {
         e.preventDefault();
         handleToggleGrosir();
+      } else if (e.key === 'F8') {
+        e.preventDefault();
+        setIsMemberModalOpen(true);
       } else if (e.key === 'F9') {
         e.preventDefault();
-        setIsReceiptOpen(true);
+        if (cart.length > 0) handleCheckout();
+      } else if (e.key === 'F10') {
+        e.preventDefault();
+        setIsSummaryModalOpen(true);
+      } else if (e.key === 'Escape') {
+        setIsMemberModalOpen(false);
+        setIsSummaryModalOpen(false);
+        setIsSettingsModalOpen(false);
+        setMemoItem(null);
+        setVoidItem(null);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isGrosirMode, cart]);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchProducts(searchQuery);
-  };
 
   const handleToggleGrosir = () => {
     const nextGrosirState = !isGrosirMode;
@@ -149,7 +202,7 @@ export default function POSClient() {
 
   const addToCart = (product: Product) => {
     setCart((prevCart) => {
-      const existingIndex = prevCart.findIndex((i) => i.product.id === product.id);
+      const existingIndex = prevCart.findIndex((i) => i.product.id === product.id && !i.isVoided);
       let selectedPrice = product.priceRetail;
       let priceType: CartItem['priceType'] = 'retail';
 
@@ -232,26 +285,114 @@ export default function POSClient() {
     });
   };
 
-  const removeFromCart = (index: number) => {
-    setCart((prevCart) => prevCart.filter((_, i) => i !== index));
+  const handleSaveMemo = (targetItem: CartItem, memo: string) => {
+    setCart((prevCart) =>
+      prevCart.map((item) => (item === targetItem ? { ...item, memo } : item))
+    );
   };
 
-  const grandTotal = cart.reduce((sum, item) => sum + item.selectedPrice * item.quantity, 0);
-  const totalItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const numPaid = typeof cashPaid === 'number' ? cashPaid : 0;
+  const handleConfirmVoid = (targetItem: CartItem, reason: string) => {
+    setCart((prevCart) =>
+      prevCart.map((item) =>
+        item === targetItem ? { ...item, isVoided: true, voidReason: reason } : item
+      )
+    );
+  };
+
+  const handleNumpadInput = (key: string) => {
+    if (key === 'C') {
+      setCashPaid('');
+    } else if (key === '←') {
+      const current = String(cashPaid);
+      if (current.length <= 1) setCashPaid('');
+      else setCashPaid(Number(current.slice(0, -1)));
+    } else if (key === '000') {
+      setCashPaid(Number(String(cashPaid || 0) + '000'));
+    } else {
+      setCashPaid(Number(String(cashPaid || '') + key));
+    }
+  };
+
+  const activeCartItems = cart.filter((item) => !item.isVoided);
+  const rawSubtotal = activeCartItems.reduce((sum, item) => sum + item.selectedPrice * item.quantity, 0);
+  
+  const memberDiscountPercent = selectedCustomer ? selectedCustomer.discountPercent : 0;
+  const memberDiscountAmount = Math.round((rawSubtotal * memberDiscountPercent) / 100);
+  const voucherDiscountAmount = voucherCode.trim().toUpperCase() === 'HARMONY10' ? 10000 : 0;
+  const totalDiscount = memberDiscountAmount + voucherDiscountAmount;
+
+  const afterDiscount = Math.max(0, rawSubtotal - totalDiscount);
+  const taxAmount = Math.round((afterDiscount * posSettings.taxPercent) / 100);
+  const serviceAmount = Math.round((afterDiscount * posSettings.servicePercent) / 100);
+
+  const grandTotal = afterDiscount + taxAmount + serviceAmount;
+  const totalItemsCount = activeCartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const numPaid = typeof cashPaid === 'number' ? cashPaid : grandTotal;
   const changeAmount = Math.max(0, numPaid - grandTotal);
 
   const setQuickPaid = (amount: number) => {
     setCashPaid(amount);
   };
 
-  const handleCheckout = () => {
-    if (cart.length === 0) return;
+  const handleCheckout = async () => {
+    if (activeCartItems.length === 0) return;
+
+    const invNo = `INV-${Date.now().toString().slice(-6)}`;
+    setLastInvoiceNo(invNo);
+
+    // Save transaction to local PostgreSQL database
+    try {
+      await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceNo: invNo,
+          cashierName: currentUser?.name || 'Kasir',
+          orderType: isGrosirMode ? 'Grosir' : 'Retail',
+          customerId: selectedCustomer?.id || null,
+          subtotal: rawSubtotal,
+          discountAmount: totalDiscount,
+          taxAmount,
+          serviceCharge: serviceAmount,
+          total: grandTotal,
+          paymentMethod,
+          cashPaid: numPaid,
+          change: changeAmount,
+          isGrosirMode,
+          items: cart,
+        }),
+      });
+      fetchProducts(searchQuery, selectedCategory);
+    } catch (e) {
+      console.error('Failed to post transaction to PostgreSQL:', e);
+    }
+
     setIsReceiptOpen(true);
   };
 
-  const categories = ['Semua', 'Coffee Grinder', 'Mug Enamel', 'Teapot', 'Peralatan Masak'];
+  const categories = ['Semua', 'Peralatan Kopi', 'Makanan', 'Minuman', 'Paket / Combo'];
   const isDark = theme === 'dark';
+
+  const mockShiftSummary: ShiftSummary = {
+    cashierName: currentUser?.name || 'Kasir 1',
+    startTime: '08:00',
+    endTime: '20:30',
+    totalTransactions: 24,
+    grossSales: 3450000,
+    totalDiscount: 150000,
+    netSales: 3300000,
+    taxCollected: taxAmount,
+    serviceCollected: serviceAmount,
+    paymentBreakdown: {
+      cash: 1800000,
+      qris: 950000,
+      card: 550000,
+      bon: 0,
+    },
+    cashInDrawer: 2300000,
+    voidCount: cart.filter((i) => i.isVoided).length,
+    voidTotalAmount: cart.filter((i) => i.isVoided).reduce((sum, i) => sum + i.selectedPrice * i.quantity, 0),
+  };
 
   return (
     <div
@@ -259,7 +400,7 @@ export default function POSClient() {
         isDark ? 'bg-[#070b14] text-slate-100' : 'bg-slate-100 text-slate-900'
       }`}
     >
-      {/* 🚀 TOP NAVIGATION TOOLBAR */}
+      {/* 🚀 TOP NAVIGATION TOOLBAR (Matches POS Repo Frm_Input) */}
       <header
         className={`h-16 border-b px-6 flex items-center justify-between shrink-0 z-30 shadow-md transition-colors ${
           isDark
@@ -270,18 +411,18 @@ export default function POSClient() {
         {/* Left Branding */}
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 via-teal-400 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/25 ring-1 ring-white/20">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 via-teal-400 to-amber-500 flex items-center justify-center shadow-lg shadow-emerald-500/25 ring-1 ring-white/20">
               <Store className="w-5 h-5 text-slate-950 font-bold" />
             </div>
             <div>
               <h1 className="font-extrabold text-base tracking-tight flex items-center gap-2">
-                Harmony Kitchen POS
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 font-bold border border-emerald-500/30">
-                  Pro POS
+                {posSettings.storeName}
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-bold border border-emerald-500/30 flex items-center gap-1">
+                  <Database className="w-3 h-3 text-emerald-400" /> PostgreSQL 17
                 </span>
               </h1>
               <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                Panglima Sudirman 65 • Kasir:{' '}
+                {posSettings.storeAddress} • Kasir:{' '}
                 <span className="text-emerald-500 font-extrabold">
                   {currentUser ? currentUser.name : 'Belum Login'}
                 </span>
@@ -291,7 +432,7 @@ export default function POSClient() {
 
           <div className={`h-6 w-px hidden md:block ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
 
-          {/* User Profile & Switch Account Button */}
+          {/* Switch Cashier Account */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsLoginOpen(true)}
@@ -303,103 +444,151 @@ export default function POSClient() {
           </div>
         </div>
 
-        {/* Right Tools */}
-        <div className="flex items-center gap-4">
+        {/* Right Tools & Shortcuts Bar */}
+        <div className="flex items-center gap-3">
+          {/* Member / Customer Button (F8) - Frm_MemberValidation */}
+          <button
+            onClick={() => setIsMemberModalOpen(true)}
+            className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all ${
+              selectedCustomer
+                ? 'bg-blue-500/20 text-blue-400 border-blue-500/40'
+                : isDark
+                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+            }`}
+          >
+            <UserCheck className="w-3.5 h-3.5 text-blue-400" />
+            <span>{selectedCustomer ? selectedCustomer.name : 'Member / Pelanggan'}</span>
+            <kbd className="hidden lg:inline text-[9px] bg-slate-950/40 px-1.5 py-0.5 rounded-xs text-slate-400">F8</kbd>
+          </button>
+
+          {/* Daily Shift Summary Report Button (F10) */}
+          <button
+            onClick={() => setIsSummaryModalOpen(true)}
+            className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all ${
+              isDark
+                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+            }`}
+          >
+            <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Laporan Shift</span>
+            <kbd className="hidden lg:inline text-[9px] bg-slate-950/40 px-1.5 py-0.5 rounded-xs text-slate-400">F10</kbd>
+          </button>
+
+          {/* Settings Button */}
+          <button
+            onClick={() => setIsSettingsModalOpen(true)}
+            className={`p-2 rounded-xl border transition-all ${
+              isDark
+                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+            }`}
+            title="Pengaturan POS & Printer (Frm_ChangeSetting)"
+          >
+            <Settings className="w-4 h-4 text-sky-400" />
+          </button>
+
+          {/* Touch Numpad Toggle (Frm_Keyboard) */}
+          <button
+            onClick={() => setShowTouchNumpad(!showTouchNumpad)}
+            className={`p-2 rounded-xl border transition-all ${
+              showTouchNumpad
+                ? 'bg-amber-500/20 border-amber-500 text-amber-400'
+                : isDark
+                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+            }`}
+            title="Keyboard Touch Virtual"
+          >
+            <Calculator className="w-4 h-4" />
+          </button>
+
+          {/* Theme & Refresh */}
           <button
             onClick={toggleTheme}
-            className={`p-2 rounded-xl border transition-all flex items-center gap-2 text-xs font-semibold active:scale-95 ${
+            className={`p-2 rounded-xl border transition-all ${
               isDark
                 ? 'bg-slate-800 hover:bg-slate-700 text-amber-400 border-slate-700'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
             }`}
           >
             {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-600" />}
-            <span className="hidden sm:inline">{isDark ? 'Light Mode' : 'Dark Mode'}</span>
           </button>
 
           <button
-            onClick={() => fetchProducts(searchQuery, true)}
+            onClick={() => fetchProducts(searchQuery, selectedCategory, true)}
             disabled={isRefreshing}
-            className={`px-3.5 py-1.5 rounded-xl active:scale-95 text-xs font-semibold flex items-center gap-2 border transition-all disabled:opacity-50 ${
+            className={`p-2 rounded-xl border transition-all disabled:opacity-50 ${
               isDark
                 ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
             }`}
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-sky-500 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>Refresh Data</span>
+            <RefreshCw className={`w-4 h-4 text-sky-500 ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
 
-          <div
-            className={`flex items-center gap-3 py-1.5 px-3.5 rounded-2xl border ${
-              isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
+          {/* Exact Mode Retail vs Mode Grosir Toggle (SB_ChangeMode in POS repo) */}
+          <button
+            onClick={handleToggleGrosir}
+            className={`px-3 py-1.5 rounded-xl font-black text-xs border flex items-center gap-2 transition-all shadow-md active:scale-95 ${
+              isGrosirMode
+                ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-amber-500/20'
+                : isDark
+                ? 'bg-slate-800 border-slate-700 text-emerald-400'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-700'
             }`}
           >
-            <div className="flex flex-col text-right leading-none">
-              <span className={`text-xs font-bold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
-                Grosir Request
-              </span>
-              <span className="text-[10px] text-slate-400 mt-0.5">Otomatis Tier 1,2,3</span>
-            </div>
-            <button
-              type="button"
-              onClick={handleToggleGrosir}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                isGrosirMode ? 'bg-amber-500' : isDark ? 'bg-slate-800' : 'bg-slate-300'
-              }`}
-            >
-              <span
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                  isGrosirMode ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
+            <Repeat className="w-3.5 h-3.5" />
+            <span>{isGrosirMode ? 'MODE GROSIR (F4)' : 'MODE RETAIL (F4)'}</span>
+          </button>
         </div>
       </header>
 
-      {/* MAIN CONTENT */}
+      {/* 💻 MAIN WORKSPACE GRID */}
       <div className="flex-1 flex overflow-hidden">
-        {/* LEFT PANEL */}
-        <div className={`flex-1 flex flex-col min-w-0 ${isDark ? 'bg-[#070b14]' : 'bg-slate-50'}`}>
+        {/* LEFT COLUMN: PRODUCTS & SEARCH */}
+        <div className="flex-1 flex flex-col min-w-0 border-r border-slate-800/60 overflow-hidden">
+          {/* Search & Categories Bar */}
           <div
-            className={`p-4 border-b flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 ${
-              isDark ? 'border-slate-800/80 bg-slate-900/40' : 'border-slate-200 bg-white'
+            className={`p-4 border-b space-y-3 shrink-0 ${
+              isDark ? 'border-slate-800 bg-slate-900/60' : 'border-slate-200 bg-slate-50'
             }`}
           >
-            <form onSubmit={handleSearch} className="flex-1 relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                ref={searchInputRef}
-                type="text"
-                placeholder="Cari Nama Barang / Scan Barcode (Tekan F2)..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full border rounded-xl pl-10 pr-20 py-2.5 text-sm font-medium transition-all ${
-                  isDark
-                    ? 'bg-slate-900 border-slate-800 text-white placeholder:text-slate-500 focus:border-emerald-500/60'
-                    : 'bg-slate-100 border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-emerald-500'
-                }`}
-              />
-              <button
-                type="submit"
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors shadow-xs"
-              >
-                Cari
-              </button>
-            </form>
+            <div className="flex items-center gap-3">
+              {/* Barcode Search Input */}
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Cari Produk / Scan Barcode (F2)..."
+                  className={`w-full pl-10 pr-10 py-2.5 rounded-xl text-sm font-medium border outline-none transition-all ${
+                    isDark
+                      ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-amber-500 ring-amber-500/20'
+                      : 'bg-white border-slate-200 text-slate-900 focus:border-amber-500'
+                  }`}
+                />
+                <kbd className="absolute right-3 top-3 text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded-xs font-mono">
+                  F2
+                </kbd>
+              </div>
+            </div>
 
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+            {/* Category Chips */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
               {categories.map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
                     selectedCategory === cat
-                      ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/40'
+                      ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
                       : isDark
-                      ? 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border-slate-800'
-                      : 'bg-white text-slate-600 hover:text-slate-900 border-slate-200 shadow-xs'
+                      ? 'bg-slate-800/60 hover:bg-slate-800 text-slate-300 border border-slate-700/60'
+                      : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
                   }`}
                 >
                   {cat}
@@ -408,353 +597,370 @@ export default function POSClient() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-auto p-4">
-            <div
-              className={`rounded-2xl border overflow-hidden shadow-xl ${
-                isDark ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200'
-              }`}
-            >
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr
-                    className={`border-b uppercase font-semibold tracking-wider ${
+          {/* Product Grid */}
+          <div className="flex-1 p-4 overflow-y-auto">
+            {isLoading ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-2">
+                <RefreshCw className="w-8 h-8 animate-spin text-amber-500" />
+                <span className="text-xs font-semibold">Memuat Data dari PostgreSQL...</span>
+              </div>
+            ) : products.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-2">
+                <Barcode className="w-12 h-12 stroke-1 text-slate-600" />
+                <span className="text-sm font-semibold">Produk tidak ditemukan</span>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5">
+                {products.map((prod) => (
+                  <div
+                    key={prod.id}
+                    onClick={() => addToCart(prod)}
+                    className={`p-3.5 rounded-2xl border flex flex-col justify-between cursor-pointer transition-all duration-200 group hover:scale-[1.02] active:scale-95 shadow-sm ${
                       isDark
-                        ? 'bg-slate-900/90 border-slate-800 text-slate-400'
-                        : 'bg-slate-100 border-slate-200 text-slate-600'
+                        ? 'bg-slate-900/80 border-slate-800/80 hover:border-amber-500/60 hover:bg-slate-800/80 text-slate-100'
+                        : 'bg-white border-slate-200 hover:border-amber-500/60 hover:shadow-md text-slate-900'
                     }`}
                   >
-                    <th className="py-3.5 px-3">Nama Barang</th>
-                    <th className="py-3.5 px-3">Barcode</th>
-                    <th className="py-3.5 px-3 text-right">Harga Retail</th>
-                    <th className="py-3.5 px-3 text-center">Stok</th>
-                    <th className="py-3.5 px-3 text-right text-amber-500">Grosir 1</th>
-                    <th className="py-3.5 px-3 text-right text-amber-500">Grosir 2</th>
-                    <th className="py-3.5 px-3 text-right text-amber-500">Grosir 3</th>
-                    <th className="py-3.5 px-3 text-center">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody
-                  className={`divide-y font-medium ${
-                    isDark ? 'divide-slate-800/60' : 'divide-slate-200'
-                  }`}
-                >
-                  {isLoading ? (
-                    <tr>
-                      <td colSpan={8} className="text-center py-20 text-slate-500">
-                        <RefreshCw className="w-7 h-7 animate-spin mx-auto mb-2 text-emerald-500" />
-                        Sedang menyinkronkan katalog barang...
-                      </td>
-                    </tr>
-                  ) : products.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="text-center py-20 text-slate-500">
-                        Barang tidak ditemukan.
-                      </td>
-                    </tr>
-                  ) : (
-                    products.map((product) => {
-                      const isOutOfStock = product.stock <= 0;
-                      return (
-                        <tr
-                          key={product.id}
-                          className={`transition-colors ${
-                            isOutOfStock
-                              ? isDark
-                                ? 'bg-rose-950/20 text-rose-300'
-                                : 'bg-rose-50 text-rose-600'
-                              : isDark
-                              ? 'hover:bg-slate-800/50 text-slate-200'
-                              : 'hover:bg-slate-50 text-slate-800'
+                    <div>
+                      <div className="flex items-center justify-between text-[11px] mb-1.5">
+                        <span className="text-slate-400 font-mono truncate max-w-[100px]">
+                          {prod.barcode}
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full font-bold uppercase text-[9px] ${
+                            prod.stock > 5
+                              ? 'bg-emerald-500/15 text-emerald-400'
+                              : prod.stock > 0
+                              ? 'bg-amber-500/15 text-amber-400'
+                              : 'bg-rose-500/15 text-rose-400'
                           }`}
                         >
-                          <td className="py-3.5 px-3 font-semibold">
-                            <HighlightText text={product.name} query={searchQuery} isDark={isDark} />
-                          </td>
-                          <td
-                            className={`py-3.5 px-3 font-mono text-[11px] ${
-                              isDark ? 'text-slate-400' : 'text-slate-500'
-                            }`}
-                          >
-                            {product.barcode}
-                          </td>
-                          <td
-                            className={`py-3.5 px-3 text-right font-extrabold ${
-                              isDark ? 'text-white' : 'text-slate-900'
-                            }`}
-                          >
-                            Rp {product.priceRetail.toLocaleString('id-ID')}
-                          </td>
-                          <td className="py-3.5 px-3 text-center">
-                            <span
-                              className={`px-2 py-0.5 rounded-md font-bold text-[11px] inline-block min-w-[28px] ${
-                                isOutOfStock
-                                  ? 'bg-rose-500/20 text-rose-500 border border-rose-500/30'
-                                  : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-                              }`}
-                            >
-                              {product.stock}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-3 text-right text-amber-500 font-mono font-medium">
-                            Rp {product.priceGrosir1.toLocaleString('id-ID')}
-                          </td>
-                          <td className="py-3.5 px-3 text-right text-amber-500 font-mono font-medium">
-                            Rp {product.priceGrosir2.toLocaleString('id-ID')}
-                          </td>
-                          <td className="py-3.5 px-3 text-right text-amber-500 font-mono font-medium">
-                            Rp {product.priceGrosir3.toLocaleString('id-ID')}
-                          </td>
-                          <td className="py-3.5 px-3 text-center">
-                            <button
-                              onClick={() => addToCart(product)}
-                              disabled={isOutOfStock}
-                              className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-sm flex items-center gap-1 mx-auto"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              Pilih
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+                          Stok: {prod.stock}
+                        </span>
+                      </div>
+                      <h3 className="font-bold text-sm leading-snug line-clamp-2 mb-2 group-hover:text-amber-400 transition-colors">
+                        <HighlightText text={prod.name} query={searchQuery} isDark={isDark} />
+                      </h3>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-800/40 flex items-end justify-between mt-2">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block font-medium">
+                          {isGrosirMode ? 'Harga Grosir (Min 12)' : 'Harga Retail'}
+                        </span>
+                        <span className="font-extrabold text-sm text-amber-500">
+                          Rp{' '}
+                          {(isGrosirMode ? prod.priceGrosir1 : prod.priceRetail).toLocaleString(
+                            'id-ID'
+                          )}
+                        </span>
+                      </div>
+                      <div className="w-7 h-7 rounded-xl bg-amber-500/10 text-amber-500 group-hover:bg-amber-500 group-hover:text-slate-950 transition-colors flex items-center justify-center">
+                        <Plus className="w-4 h-4 stroke-[3]" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* RIGHT PANEL */}
+        {/* RIGHT COLUMN: CART & CHECKOUT */}
         <div
-          className={`w-[440px] flex flex-col border-l shadow-2xl shrink-0 transition-colors ${
-            isDark
-              ? 'bg-slate-900/95 border-slate-800'
-              : 'bg-white border-slate-200'
+          className={`w-96 lg:w-[420px] border-l flex flex-col shrink-0 overflow-hidden ${
+            isDark ? 'border-slate-800 bg-slate-900/90' : 'border-slate-200 bg-white'
           }`}
         >
+          {/* Cart Header */}
           <div
-            className={`p-4 border-b flex items-center justify-between ${
+            className={`p-4 border-b flex items-center justify-between shrink-0 ${
               isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'
             }`}
           >
-            <div className="flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5 text-emerald-500" />
-              <h2 className={`font-bold text-base ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                Keranjang Kasir ({currentUser?.name || 'Kasir'})
-              </h2>
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
+                <ShoppingCart className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="font-bold text-base">Keranjang Transaksi ({isGrosirMode ? 'Grosir' : 'Retail'})</h2>
+                <p className="text-xs text-slate-400">
+                  {activeCartItems.length} Item Unique • Total Qty: {totalItemsCount}
+                </p>
+              </div>
             </div>
-            <span className="text-xs px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 font-extrabold border border-emerald-500/30">
-              {totalItemsCount} Item
-            </span>
+            {cart.length > 0 && (
+              <button
+                onClick={() => setCart([])}
+                className="text-xs font-semibold text-rose-400 hover:text-rose-300 p-1.5 rounded-lg hover:bg-rose-500/10 transition-colors"
+              >
+                Kosongkan
+              </button>
+            )}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+          {/* Cart Items List */}
+          <div className="flex-1 p-4 overflow-y-auto space-y-3">
             {cart.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center p-6 space-y-3">
-                <div
-                  className={`w-16 h-16 rounded-2xl flex items-center justify-center border ${
-                    isDark ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-100 border-slate-200'
-                  }`}
-                >
-                  <ShoppingCart className="w-8 h-8 text-slate-400" />
-                </div>
-                <div>
-                  <p className={`font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                    Keranjang masih kosong
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Pilih barang pada tabel katalog di sebelah kiri.
-                  </p>
-                </div>
+              <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-2 italic">
+                <ShoppingCart className="w-12 h-12 stroke-1 text-slate-600" />
+                <span className="text-sm font-semibold">Keranjang masih kosong</span>
+                <span className="text-xs">Klik produk di kiri untuk menambahkan</span>
               </div>
             ) : (
-              cart.map((item, index) => (
+              cart.map((item, idx) => (
                 <div
-                  key={index}
-                  className={`border p-3.5 rounded-xl flex flex-col gap-2 transition-all ${
-                    isDark
-                      ? 'bg-slate-950/80 border-slate-800 hover:border-slate-700'
-                      : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                  key={idx}
+                  className={`p-3 rounded-2xl border transition-all ${
+                    item.isVoided
+                      ? 'opacity-40 line-through border-rose-800/40 bg-rose-950/10'
+                      : isDark
+                      ? 'bg-slate-950/60 border-slate-800'
+                      : 'bg-slate-50 border-slate-200'
                   }`}
                 >
-                  <div className="flex justify-between items-start">
-                    <span
-                      className={`font-semibold text-xs flex-1 pr-2 leading-snug ${
-                        isDark ? 'text-slate-100' : 'text-slate-800'
-                      }`}
-                    >
-                      {item.product.name}
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <h4 className="font-bold text-xs text-slate-200 line-clamp-1">
+                        {item.product.name}
+                      </h4>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
+                        <span>Rp {item.selectedPrice.toLocaleString('id-ID')}</span>
+                        {isGrosirMode && (
+                          <span className="px-1.5 py-0.2 rounded-xs bg-amber-500/10 text-amber-400 text-[10px] font-bold">
+                            {item.priceType.toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <span className="font-extrabold text-sm text-amber-400">
+                      Rp {(item.selectedPrice * item.quantity).toLocaleString('id-ID')}
                     </span>
-                    <button
-                      onClick={() => removeFromCart(index)}
-                      className="text-slate-400 hover:text-rose-500 transition-colors p-1"
-                      title="Hapus"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs pt-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-emerald-500">
-                        Rp {(item.selectedPrice * item.quantity).toLocaleString('id-ID')}
-                      </span>
-                      {item.priceType !== 'retail' && (
-                        <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/20 text-amber-600 font-bold rounded uppercase">
-                          {item.priceType}
-                        </span>
-                      )}
+                  {/* Memo Display */}
+                  {item.memo && (
+                    <div className="text-[11px] text-amber-400 bg-amber-500/10 px-2 py-1 rounded-lg mb-2 italic">
+                      Catatan: {item.memo}
                     </div>
+                  )}
 
-                    <div
-                      className={`flex items-center gap-2 p-1 rounded-lg border ${
-                        isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-                      }`}
-                    >
-                      <button
-                        onClick={() => updateQty(index, -1)}
-                        className={`w-6 h-6 rounded flex items-center justify-center font-bold active:scale-95 transition-transform ${
-                          isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-                      <span className={`w-6 text-center font-bold text-xs ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                        {item.quantity}
-                      </span>
-                      <button
-                        onClick={() => updateQty(index, 1)}
-                        className={`w-6 h-6 rounded flex items-center justify-center font-bold active:scale-95 transition-transform ${
-                          isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
+                  {/* Item Actions Toolbar */}
+                  {!item.isVoided && (
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-800/40">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setMemoItem(item)}
+                          className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold flex items-center gap-1"
+                        >
+                          <FileText className="w-3 h-3 text-amber-400" />
+                          <span>Note</span>
+                        </button>
+                        <button
+                          onClick={() => setVoidItem(item)}
+                          className="px-2 py-1 rounded-lg bg-rose-950/30 hover:bg-rose-900/40 text-rose-400 text-[10px] font-bold flex items-center gap-1"
+                        >
+                          <ShieldAlert className="w-3 h-3" />
+                          <span>Void</span>
+                        </button>
+                      </div>
+
+                      {/* Qty Controls */}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => updateQty(idx, -1)}
+                          className="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center font-bold text-xs"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="font-bold text-xs w-5 text-center">{item.quantity}</span>
+                        <button
+                          onClick={() => updateQty(idx, 1)}
+                          className="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center font-bold text-xs"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               ))
             )}
           </div>
 
+          {/* Touch Numpad */}
+          {showTouchNumpad && (
+            <div className="p-3 border-t border-slate-800 bg-slate-950/90 shrink-0 grid grid-cols-4 gap-1.5 text-xs font-bold">
+              {['7', '8', '9', 'C', '4', '5', '6', '←', '1', '2', '3', '000', '0', '00'].map((btn) => (
+                <button
+                  key={btn}
+                  onClick={() => handleNumpadInput(btn)}
+                  className="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-100 text-center font-bold transition-all border border-slate-700/60"
+                >
+                  {btn}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Checkout & Summary Panel */}
           <div
-            className={`p-5 border-t space-y-4 ${
-              isDark ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'
+            className={`p-4 border-t space-y-3 shrink-0 ${
+              isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'
             }`}
           >
-            <div className="space-y-2 text-sm">
-              <div className={`flex justify-between text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                <span>Subtotal ({totalItemsCount} item)</span>
-                <span>Rp {grandTotal.toLocaleString('id-ID')}</span>
-              </div>
-              <div className={`flex justify-between items-baseline pt-2 border-t ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
-                <span className={`font-bold text-base ${isDark ? 'text-white' : 'text-slate-900'}`}>Total Tagihan</span>
-                <span className="font-extrabold text-2xl text-emerald-500 font-mono">
-                  Rp {grandTotal.toLocaleString('id-ID')}
+            {/* Customer Banner */}
+            {selectedCustomer && (
+              <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-between text-xs">
+                <span className="font-bold text-blue-400">
+                  Pelanggan: {selectedCustomer.name}
                 </span>
+                <span className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full font-bold">
+                  Diskon {selectedCustomer.discountPercent}%
+                </span>
+              </div>
+            )}
+
+            {/* Summary Lines */}
+            <div className="space-y-1 text-xs">
+              <div className="flex justify-between text-slate-400">
+                <span>Subtotal</span>
+                <span>Rp {rawSubtotal.toLocaleString('id-ID')}</span>
+              </div>
+
+              {totalDiscount > 0 && (
+                <div className="flex justify-between text-rose-400 font-medium">
+                  <span>Diskon Member / Voucher</span>
+                  <span>- Rp {totalDiscount.toLocaleString('id-ID')}</span>
+                </div>
+              )}
+
+              {taxAmount > 0 && (
+                <div className="flex justify-between text-slate-400">
+                  <span>Pajak ({posSettings.taxPercent}%)</span>
+                  <span>Rp {taxAmount.toLocaleString('id-ID')}</span>
+                </div>
+              )}
+
+              {serviceAmount > 0 && (
+                <div className="flex justify-between text-slate-400">
+                  <span>Service ({posSettings.servicePercent}%)</span>
+                  <span>Rp {serviceAmount.toLocaleString('id-ID')}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between text-base font-black text-slate-100 pt-1 border-t border-slate-800">
+                <span>Total Tagihan</span>
+                <span className="text-amber-400">Rp {grandTotal.toLocaleString('id-ID')}</span>
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <span className={`text-[11px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Uang Cepat:</span>
-              <div className="grid grid-cols-4 gap-1.5">
-                <button
-                  onClick={() => setQuickPaid(grandTotal)}
-                  disabled={grandTotal === 0}
-                  className={`py-1 px-2 rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-40 ${
-                    isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-slate-200 text-slate-700 border border-slate-200'
-                  }`}
-                >
-                  Uang Pas
-                </button>
-                <button
-                  onClick={() => setQuickPaid(50000)}
-                  className={`py-1 px-2 rounded-lg text-[11px] font-semibold transition-colors ${
-                    isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-slate-200 text-slate-700 border border-slate-200'
-                  }`}
-                >
-                  50.000
-                </button>
-                <button
-                  onClick={() => setQuickPaid(100000)}
-                  className={`py-1 px-2 rounded-lg text-[11px] font-semibold transition-colors ${
-                    isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-slate-200 text-slate-700 border border-slate-200'
-                  }`}
-                >
-                  100.000
-                </button>
-                <button
-                  onClick={() => setQuickPaid(200000)}
-                  className={`py-1 px-2 rounded-lg text-[11px] font-semibold transition-colors ${
-                    isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-white hover:bg-slate-200 text-slate-700 border border-slate-200'
-                  }`}
-                >
-                  200.000
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className={`text-xs font-semibold flex items-center justify-between ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                <span className="flex items-center gap-1.5">
-                  <CreditCard className="w-3.5 h-3.5 text-emerald-500" />
-                  Jumlah Bayar (Rp)
-                </span>
-                {numPaid >= grandTotal && grandTotal > 0 && (
-                  <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-1">
-                    <Check className="w-3 h-3" /> Cukup
-                  </span>
-                )}
+            {/* Quick Cash Presets */}
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5 block">
+                Nominal Bayar Cepat
               </label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {[20000, 50000, 100000, grandTotal].map((amt, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setQuickPaid(amt)}
+                    className={`py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${
+                      cashPaid === amt
+                        ? 'bg-amber-500 text-slate-950 border-amber-400'
+                        : isDark
+                        ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    {idx === 3 ? 'Pas' : `Rp ${amt / 1000}k`}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Cash Input */}
+            <div className="flex gap-2">
               <input
                 type="number"
-                placeholder="0"
                 value={cashPaid}
-                onChange={(e) => setCashPaid(e.target.value ? Number(e.target.value) : '')}
-                className={`w-full border rounded-xl px-3.5 py-2.5 text-lg font-bold font-mono transition-all ${
+                onChange={(e) => setCashPaid(e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder="Jumlah Bayar Tunai (Rp)..."
+                className={`flex-1 px-3 py-2 rounded-xl text-xs font-bold border outline-none transition-all ${
                   isDark
-                    ? 'bg-slate-900 border-slate-700 text-white placeholder:text-slate-600 focus:border-emerald-500'
-                    : 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-emerald-500'
+                    ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-amber-500'
+                    : 'bg-white border-slate-200 text-slate-900 focus:border-amber-500'
                 }`}
               />
+              <div className="flex items-center px-3 rounded-xl bg-slate-800 text-xs font-extrabold text-emerald-400">
+                Kembali: Rp {changeAmount.toLocaleString('id-ID')}
+              </div>
             </div>
 
-            <div
-              className={`flex justify-between items-center text-xs p-3 rounded-xl border ${
-                isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200'
-              }`}
+            {/* Checkout Button (F9) */}
+            <button
+              onClick={handleCheckout}
+              disabled={activeCartItems.length === 0}
+              className="w-full py-3 rounded-xl font-black text-sm bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 hover:from-amber-400 hover:to-yellow-400 active:scale-98 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Kembali:</span>
-              <span className="font-extrabold text-amber-500 font-mono text-base">
-                Rp {changeAmount.toLocaleString('id-ID')}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <button
-                onClick={() => setIsReceiptOpen(true)}
-                disabled={cart.length === 0}
-                className={`py-3 px-3 rounded-xl font-bold text-xs border flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 active:scale-95 ${
-                  isDark
-                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
-                }`}
-              >
-                <Receipt className="w-4 h-4 text-emerald-500" />
-                Preview Nota
-              </button>
-              <button
-                onClick={handleCheckout}
-                disabled={cart.length === 0 || numPaid < grandTotal}
-                className="py-3 px-3 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-400 text-white font-extrabold text-xs shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                Bayar & Cetak
-              </button>
-            </div>
+              <Receipt className="w-5 h-5" />
+              <span>Bayar & Simpan (F9)</span>
+            </button>
           </div>
         </div>
       </div>
+
+      {/* ALL MODALS INTEGRATED */}
+      <LoginModal
+        isOpen={isLoginOpen}
+        onClose={() => setIsLoginOpen(false)}
+        onSelectUser={(user) => {
+          setCurrentUser(user);
+          setIsLoginOpen(false);
+        }}
+        currentUsername={currentUser?.username || ''}
+      />
+
+      <MemberValidationModal
+        isOpen={isMemberModalOpen}
+        isDark={isDark}
+        selectedCustomer={selectedCustomer}
+        onClose={() => setIsMemberModalOpen(false)}
+        onSelectCustomer={(cust) => setSelectedCustomer(cust)}
+      />
+
+      <ItemMemoModal
+        isOpen={!!memoItem}
+        isDark={isDark}
+        item={memoItem}
+        onClose={() => setMemoItem(null)}
+        onSaveMemo={handleSaveMemo}
+      />
+
+      <VoidReasonModal
+        isOpen={!!voidItem}
+        isDark={isDark}
+        item={voidItem}
+        onClose={() => setVoidItem(null)}
+        onConfirmVoid={handleConfirmVoid}
+      />
+
+      <CashierSummaryModal
+        isOpen={isSummaryModalOpen}
+        isDark={isDark}
+        currentUser={currentUser}
+        summary={mockShiftSummary}
+        onClose={() => setIsSummaryModalOpen(false)}
+      />
+
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        isDark={isDark}
+        settings={posSettings}
+        onClose={() => setIsSettingsModalOpen(false)}
+        onSaveSettings={(newSet) => setPosSettings(newSet)}
+      />
 
       <ReceiptModal
         isOpen={isReceiptOpen}
@@ -762,15 +968,11 @@ export default function POSClient() {
         cart={cart}
         cashierName={currentUser?.name || 'Kasir'}
         cashPaid={numPaid}
-        invoiceNo="INV-001"
-      />
-
-      <LoginModal
-        isOpen={isLoginOpen}
-        onLoginSuccess={(user) => {
-          setCurrentUser(user);
-          setIsLoginOpen(false);
-        }}
+        invoiceNo={lastInvoiceNo || `INV-${Date.now().toString().slice(-6)}`}
+        orderType={isGrosirMode ? 'Takeaway' : 'Takeaway'}
+        customer={selectedCustomer}
+        paymentMethod={paymentMethod}
+        discountAmount={totalDiscount}
       />
     </div>
   );
