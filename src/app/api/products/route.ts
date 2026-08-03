@@ -4,26 +4,22 @@ import { prisma } from '@/lib/db';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const query = searchParams.get('q')?.toLowerCase() || '';
-    const category = searchParams.get('category') || '';
+    const query = searchParams.get('q')?.trim().toLowerCase() || '';
+    const limit = Number(searchParams.get('limit')) || 40;
 
     const whereCondition: any = {};
-
-    if (category && category !== 'Semua') {
-      whereCondition.category = category;
-    }
 
     if (query) {
       whereCondition.OR = [
         { name: { contains: query, mode: 'insensitive' } },
         { barcode: { contains: query } },
-        { category: { contains: query, mode: 'insensitive' } },
       ];
     }
 
     const products = await prisma.product.findMany({
       where: whereCondition,
       orderBy: { name: 'asc' },
+      take: limit,
     });
 
     return NextResponse.json({
@@ -54,7 +50,7 @@ export async function POST(request: Request) {
         priceGrosir1: Number(body.priceGrosir1 || body.priceRetail),
         priceGrosir2: Number(body.priceGrosir2 || body.priceRetail),
         priceGrosir3: Number(body.priceGrosir3 || body.priceRetail),
-        printerTarget: body.printerTarget || 'Kitchen',
+        printerTarget: body.printerTarget || 'Cashier',
       },
     });
 

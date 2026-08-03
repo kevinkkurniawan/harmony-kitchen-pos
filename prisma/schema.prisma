@@ -27,7 +27,7 @@ model Product {
   priceGrosir1  Int
   priceGrosir2  Int
   priceGrosir3  Int
-  printerTarget String?  // Kitchen, Bar, Pantry
+  printerTarget String?  // Cashier, LX300, Pantry
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -46,25 +46,12 @@ model Customer {
   transactions    Transaction[]
 }
 
-model Table {
-  id             String   @id @default(uuid())
-  tableNo        String   @unique
-  name           String
-  capacity       Int
-  status         String   @default("available") // available, occupied, reserved
-  currentOrderId String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-}
-
 model Transaction {
   id             String            @id @default(uuid())
   invoiceNo      String            @unique
   date           DateTime          @default(now())
   cashierName    String
-  orderType      String            @default("Dine-In") // Dine-In, Takeaway, Delivery
-  tableNo        String?
-  serverName     String?
+  mode           String            @default("Retail") // Retail, Grosir
   customerId     String?
   customer       Customer?         @relation(fields: [customerId], references: [id])
   subtotal       Int
@@ -73,7 +60,7 @@ model Transaction {
   taxAmount      Int               @default(0)
   serviceCharge  Int               @default(0)
   total          Int
-  paymentMethod  String            @default("Cash") // Cash, QRIS, DebitCard, CreditCard, Bon
+  paymentMethod  String            @default("Tunai") // Tunai, Debit, Kredit, QRIS, Bon
   cashPaid       Int
   change         Int
   isGrosirMode   Boolean           @default(false)

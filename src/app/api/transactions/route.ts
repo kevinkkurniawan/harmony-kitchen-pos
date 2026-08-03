@@ -27,9 +27,7 @@ export async function POST(request: Request) {
     const {
       invoiceNo,
       cashierName,
-      orderType,
-      tableNo,
-      serverName,
+      mode,
       customerId,
       subtotal,
       discountAmount,
@@ -46,14 +44,12 @@ export async function POST(request: Request) {
     } = body;
 
     const transaction = await prisma.$transaction(async (tx) => {
-      // 1. Create Transaction Record
+      // 1. Create Transaction Record (Matches POS repo)
       const createdTx = await tx.transaction.create({
         data: {
           invoiceNo: invoiceNo || `INV-${Date.now()}`,
           cashierName: cashierName || 'Kasir',
-          orderType: orderType || 'Dine-In',
-          tableNo: tableNo || null,
-          serverName: serverName || null,
+          mode: mode || (isGrosirMode ? 'Grosir' : 'Retail'),
           customerId: customerId || null,
           subtotal: Number(subtotal),
           discountAmount: Number(discountAmount || 0),
@@ -61,7 +57,7 @@ export async function POST(request: Request) {
           taxAmount: Number(taxAmount || 0),
           serviceCharge: Number(serviceCharge || 0),
           total: Number(total),
-          paymentMethod: paymentMethod || 'Cash',
+          paymentMethod: paymentMethod || 'Tunai',
           cashPaid: Number(cashPaid),
           change: Number(change),
           isGrosirMode: Boolean(isGrosirMode),
@@ -95,14 +91,6 @@ export async function POST(request: Request) {
             },
           });
         }
-      }
-
-      // 3. Update table status if applicable
-      if (tableNo) {
-        await tx.table.updateMany({
-          where: { tableNo: tableNo },
-          data: { status: 'occupied', currentOrderId: createdTx.id },
-        });
       }
 
       return createdTx;

@@ -3,9 +3,9 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Seeding Harmony Kitchen POS PostgreSQL Database...');
+  console.log('Seeding Harmony Kitchenware POS PostgreSQL Database...');
 
-  // Seed Users
+  // Seed Users (Frm_LogIn)
   await prisma.user.upsert({
     where: { username: 'lia' },
     update: {},
@@ -24,7 +24,7 @@ async function main() {
     create: { username: 'sulis', name: 'Sulis Supervisor', role: 'Supervisor' },
   });
 
-  // Seed Customers
+  // Seed Customers (Frm_MemberValidation / sp_SPSalesGrosir_GetCustomer)
   await prisma.customer.upsert({
     where: { customerNo: 'CUST-001' },
     update: {},
@@ -49,25 +49,7 @@ async function main() {
     },
   });
 
-  // Seed Tables
-  const tables = [
-    { tableNo: 'T01', name: 'Meja 01', capacity: 2, status: 'available' },
-    { tableNo: 'T02', name: 'Meja 02', capacity: 4, status: 'occupied' },
-    { tableNo: 'T03', name: 'Meja 03', capacity: 4, status: 'available' },
-    { tableNo: 'T04', name: 'Meja 04', capacity: 6, status: 'reserved' },
-    { tableNo: 'T05', name: 'Meja 05 (VIP)', capacity: 8, status: 'available' },
-    { tableNo: 'T06', name: 'Meja Outdoor 01', capacity: 4, status: 'available' },
-  ];
-
-  for (const t of tables) {
-    await prisma.table.upsert({
-      where: { tableNo: t.tableNo },
-      update: {},
-      create: t,
-    });
-  }
-
-  // Seed Products
+  // Seed Products (sp_SPSalesPOSDetail_GetData & sp_SPSalesGrosir_GetPrice)
   const products = [
     {
       barcode: '0000023274495',
@@ -79,91 +61,67 @@ async function main() {
       priceGrosir1: 80000,
       priceGrosir2: 82500,
       priceGrosir3: 78000,
-      printerTarget: 'Pantry',
+      printerTarget: 'Cashier',
     },
     {
-      barcode: '8991001000101',
-      name: 'Nasi Goreng Spesial Harmony',
-      category: 'Makanan',
-      uom: 'Porsi',
-      priceRetail: 35000,
-      stock: 50,
-      priceGrosir1: 32000,
-      priceGrosir2: 33000,
-      priceGrosir3: 30000,
-      printerTarget: 'Kitchen',
+      barcode: '7581246834770',
+      name: 'OTC Coffee Grinder Manual',
+      category: 'Peralatan Kopi',
+      uom: 'Pcs',
+      priceRetail: 80000,
+      stock: 15,
+      priceGrosir1: 75000,
+      priceGrosir2: 77500,
+      priceGrosir3: 72000,
+      printerTarget: 'Cashier',
     },
     {
-      barcode: '8991001000102',
-      name: 'Ayam Bakar Madu + Nasi',
-      category: 'Makanan',
-      uom: 'Porsi',
-      priceRetail: 42000,
-      stock: 35,
-      priceGrosir1: 39000,
-      priceGrosir2: 40000,
-      priceGrosir3: 37000,
-      printerTarget: 'Kitchen',
+      barcode: '6984526518659',
+      name: 'ERIS Coffee Grinder Manual Tabung Stainless',
+      category: 'Peralatan Kopi',
+      uom: 'Pcs',
+      priceRetail: 85000,
+      stock: 8,
+      priceGrosir1: 80000,
+      priceGrosir2: 82500,
+      priceGrosir3: 78000,
+      printerTarget: 'Cashier',
     },
     {
-      barcode: '8991001000201',
-      name: 'Es Kopi Susu Gula Aren',
-      category: 'Minuman',
-      uom: 'Gelas',
-      priceRetail: 22000,
-      stock: 100,
-      priceGrosir1: 19000,
-      priceGrosir2: 20000,
-      priceGrosir3: 18000,
-      printerTarget: 'Bar',
-    },
-    {
-      barcode: '8991001000202',
-      name: 'Matcha Latte Ice',
-      category: 'Minuman',
-      uom: 'Gelas',
-      priceRetail: 28000,
-      stock: 80,
-      priceGrosir1: 25000,
-      priceGrosir2: 26000,
-      priceGrosir3: 24000,
-      printerTarget: 'Bar',
-    },
-    {
-      barcode: '8991001000301',
-      name: 'Paket Hemat Berdua (Nasi Goreng + Es Teh x2)',
-      category: 'Paket / Combo',
-      uom: 'Paket',
-      priceRetail: 75000,
-      stock: 20,
-      priceGrosir1: 70000,
-      priceGrosir2: 72000,
-      priceGrosir3: 68000,
-      printerTarget: 'Kitchen',
+      barcode: '0000023101371',
+      name: 'Nima Electric Coffee Grinder',
+      category: 'Peralatan Kopi',
+      uom: 'Pcs',
+      priceRetail: 95000,
+      stock: 10,
+      priceGrosir1: 85000,
+      priceGrosir2: 87500,
+      priceGrosir3: 82000,
+      printerTarget: 'Cashier',
     },
     {
       barcode: '0000023991201',
       name: 'ARJ Mug Enamel Jago Tutup 9cm',
-      category: 'Peralatan Kopi',
+      category: 'Mug Enamel',
       uom: 'Pcs',
       priceRetail: 25000,
       stock: 24,
       priceGrosir1: 22000,
       priceGrosir2: 23000,
       priceGrosir3: 20000,
-      printerTarget: 'Pantry',
+      printerTarget: 'LX300',
     },
     {
       barcode: '0000023991505',
       name: 'Harmony Stainless Steel Teapot 1.5L',
-      category: 'Peralatan Kopi',
+      category: 'Teapot',
       uom: 'Pcs',
       priceRetail: 115000,
       stock: 8,
       priceGrosir1: 100000,
       priceGrosir2: 105000,
       priceGrosir3: 95000,
-      printerTarget: 'Pantry',
+      printerTarget: 'LX300',
     },
   ];
 

@@ -62,7 +62,7 @@ export default function MemberValidationModal({
           </div>
           <button
             onClick={onClose}
-            className={`p-2 rounded-xl transition-colors ${
+            className={`cursor-pointer p-2 rounded-xl transition-colors ${
               isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'
             }`}
           >
@@ -95,7 +95,7 @@ export default function MemberValidationModal({
                 <div
                   key={cust.id}
                   onClick={() => handleSelect(cust)}
-                  className={`p-3.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                  className={`cursor-pointer p-3.5 rounded-xl border flex items-center justify-between transition-all active:scale-98 ${
                     isSelected
                       ? 'border-blue-500 bg-blue-500/10 ring-1 ring-blue-500'
                       : isDark
@@ -133,7 +133,7 @@ export default function MemberValidationModal({
         <div className={`p-4 border-t flex items-center justify-between ${isDark ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
           <button
             onClick={handleClear}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold ${
+            className={`cursor-pointer px-4 py-2 rounded-xl text-xs font-semibold active:scale-95 transition-all ${
               isDark ? 'text-rose-400 hover:bg-rose-950/30' : 'text-rose-600 hover:bg-rose-50'
             }`}
           >
@@ -141,7 +141,7 @@ export default function MemberValidationModal({
           </button>
           <button
             onClick={onClose}
-            className={`px-5 py-2 rounded-xl font-bold text-sm ${
+            className={`cursor-pointer px-5 py-2 rounded-xl font-bold text-sm active:scale-95 transition-all ${
               isDark ? 'bg-slate-800 text-slate-200 hover:bg-slate-700' : 'bg-slate-200 text-slate-800 hover:bg-slate-300'
             }`}
           >

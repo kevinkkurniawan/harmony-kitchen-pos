@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Search,
   RefreshCw,
@@ -67,25 +67,22 @@ function HighlightText({ text, query, isDark }: { text: string; query: string; i
 }
 
 export default function POSClient() {
-  const [currentUser, setCurrentUser] = useState<POSUser | null>(MOCK_POS_USERS[0]); // Default Lia Kasir
+  const [currentUser, setCurrentUser] = useState<POSUser | null>(MOCK_POS_USERS[0]);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('Semua');
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [isGrosirMode, setIsGrosirMode] = useState(false); // Mode Retail vs Mode Grosir (matches POS repo Frm_Input)
+  const [isGrosirMode, setIsGrosirMode] = useState(false);
   const [showTouchNumpad, setShowTouchNumpad] = useState(false);
 
-  // Customer & Payment States (matches Frm_Input in POS repo)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'QRIS' | 'DebitCard' | 'CreditCard' | 'Bon'>('Cash');
   const [voucherCode, setVoucherCode] = useState('');
 
-  // POS Settings state (Frm_ChangeSetting)
   const [posSettings, setPosSettings] = useState({
     storeName: 'Harmony Kitchenware',
     storeAddress: 'Jl. Panglima Sudirman No. 65',
@@ -99,7 +96,6 @@ export default function POSClient() {
     printerPantry: 'EPSON LX-300+II Pantry',
   });
 
-  // Modals state
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -117,29 +113,33 @@ export default function POSClient() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  const fetchProducts = async (query = '', category = 'Semua', showRefreshAnimation = false) => {
+  const fetchProducts = useCallback(async (query = '', showRefreshAnimation = false) => {
     if (showRefreshAnimation) setIsRefreshing(true);
     else setIsLoading(true);
 
     try {
-      const res = await fetch(`/api/products?q=${encodeURIComponent(query)}&category=${encodeURIComponent(category)}`);
+      const res = await fetch(`/api/products?q=${encodeURIComponent(query)}&limit=40`);
       const json = await res.json();
       if (json.success) {
         setProducts(json.data);
       }
     } catch (err) {
-      console.error('Failed to fetch products from PostgreSQL API:', err);
+      console.error('Failed to fetch products:', err);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  };
+  }, []);
 
+  // Debounced Search Fetch
   useEffect(() => {
-    fetchProducts(searchQuery, selectedCategory);
-  }, [searchQuery, selectedCategory]);
+    const timer = setTimeout(() => {
+      fetchProducts(searchQuery);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [searchQuery, fetchProducts]);
 
-  // Global Keyboard Shortcuts (F2, F4, F8, F9, F10, Esc) - Matches POS.exe
+  // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F2') {
@@ -340,7 +340,6 @@ export default function POSClient() {
     const invNo = `INV-${Date.now().toString().slice(-6)}`;
     setLastInvoiceNo(invNo);
 
-    // Save transaction to local PostgreSQL database
     try {
       await fetch('/api/transactions', {
         method: 'POST',
@@ -348,7 +347,7 @@ export default function POSClient() {
         body: JSON.stringify({
           invoiceNo: invNo,
           cashierName: currentUser?.name || 'Kasir',
-          orderType: isGrosirMode ? 'Grosir' : 'Retail',
+          mode: isGrosirMode ? 'Grosir' : 'Retail',
           customerId: selectedCustomer?.id || null,
           subtotal: rawSubtotal,
           discountAmount: totalDiscount,
@@ -362,7 +361,7 @@ export default function POSClient() {
           items: cart,
         }),
       });
-      fetchProducts(searchQuery, selectedCategory);
+      fetchProducts(searchQuery);
     } catch (e) {
       console.error('Failed to post transaction to PostgreSQL:', e);
     }
@@ -370,7 +369,6 @@ export default function POSClient() {
     setIsReceiptOpen(true);
   };
 
-  const categories = ['Semua', 'Peralatan Kopi', 'Makanan', 'Minuman', 'Paket / Combo'];
   const isDark = theme === 'dark';
 
   const mockShiftSummary: ShiftSummary = {
@@ -400,7 +398,7 @@ export default function POSClient() {
         isDark ? 'bg-[#070b14] text-slate-100' : 'bg-slate-100 text-slate-900'
       }`}
     >
-      {/* 🚀 TOP NAVIGATION TOOLBAR (Matches POS Repo Frm_Input) */}
+      {/* TOP NAVIGATION TOOLBAR */}
       <header
         className={`h-16 border-b px-6 flex items-center justify-between shrink-0 z-30 shadow-md transition-colors ${
           isDark
@@ -436,7 +434,7 @@ export default function POSClient() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsLoginOpen(true)}
-              className="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 hover:bg-emerald-500/25 transition-all"
+              className="cursor-pointer px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 hover:bg-emerald-500/25 active:scale-95 transition-all"
             >
               <UserIcon className="w-3.5 h-3.5" />
               <span>Ganti Kasir ({currentUser?.username || 'Login'})</span>
@@ -446,12 +444,12 @@ export default function POSClient() {
 
         {/* Right Tools & Shortcuts Bar */}
         <div className="flex items-center gap-3">
-          {/* Member / Customer Button (F8) - Frm_MemberValidation */}
+          {/* Member / Customer Button (F8) */}
           <button
             onClick={() => setIsMemberModalOpen(true)}
-            className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all ${
+            className={`cursor-pointer px-3 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all active:scale-95 ${
               selectedCustomer
-                ? 'bg-blue-500/20 text-blue-400 border-blue-500/40'
+                ? 'bg-blue-500/20 text-blue-400 border-blue-500/40 hover:bg-blue-500/30'
                 : isDark
                 ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
@@ -465,7 +463,7 @@ export default function POSClient() {
           {/* Daily Shift Summary Report Button (F10) */}
           <button
             onClick={() => setIsSummaryModalOpen(true)}
-            className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all ${
+            className={`cursor-pointer px-3 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all active:scale-95 ${
               isDark
                 ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
@@ -479,7 +477,7 @@ export default function POSClient() {
           {/* Settings Button */}
           <button
             onClick={() => setIsSettingsModalOpen(true)}
-            className={`p-2 rounded-xl border transition-all ${
+            className={`cursor-pointer p-2 rounded-xl border transition-all active:scale-95 ${
               isDark
                 ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
@@ -489,10 +487,10 @@ export default function POSClient() {
             <Settings className="w-4 h-4 text-sky-400" />
           </button>
 
-          {/* Touch Numpad Toggle (Frm_Keyboard) */}
+          {/* Touch Numpad Toggle */}
           <button
             onClick={() => setShowTouchNumpad(!showTouchNumpad)}
-            className={`p-2 rounded-xl border transition-all ${
+            className={`cursor-pointer p-2 rounded-xl border transition-all active:scale-95 ${
               showTouchNumpad
                 ? 'bg-amber-500/20 border-amber-500 text-amber-400'
                 : isDark
@@ -507,7 +505,7 @@ export default function POSClient() {
           {/* Theme & Refresh */}
           <button
             onClick={toggleTheme}
-            className={`p-2 rounded-xl border transition-all ${
+            className={`cursor-pointer p-2 rounded-xl border transition-all active:scale-95 ${
               isDark
                 ? 'bg-slate-800 hover:bg-slate-700 text-amber-400 border-slate-700'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
@@ -517,9 +515,9 @@ export default function POSClient() {
           </button>
 
           <button
-            onClick={() => fetchProducts(searchQuery, selectedCategory, true)}
+            onClick={() => fetchProducts(searchQuery, true)}
             disabled={isRefreshing}
-            className={`p-2 rounded-xl border transition-all disabled:opacity-50 ${
+            className={`cursor-pointer p-2 rounded-xl border transition-all active:scale-95 disabled:opacity-50 ${
               isDark
                 ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
@@ -528,15 +526,15 @@ export default function POSClient() {
             <RefreshCw className={`w-4 h-4 text-sky-500 ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
 
-          {/* Exact Mode Retail vs Mode Grosir Toggle (SB_ChangeMode in POS repo) */}
+          {/* Mode Retail vs Mode Grosir Toggle */}
           <button
             onClick={handleToggleGrosir}
-            className={`px-3 py-1.5 rounded-xl font-black text-xs border flex items-center gap-2 transition-all shadow-md active:scale-95 ${
+            className={`cursor-pointer px-3 py-1.5 rounded-xl font-black text-xs border flex items-center gap-2 transition-all shadow-md active:scale-95 ${
               isGrosirMode
-                ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-amber-500/20'
+                ? 'bg-amber-500 text-slate-950 border-amber-400 hover:bg-amber-400 shadow-amber-500/20'
                 : isDark
-                ? 'bg-slate-800 border-slate-700 text-emerald-400'
-                : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                ? 'bg-slate-800 border-slate-700 text-emerald-400 hover:bg-slate-700'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
             }`}
           >
             <Repeat className="w-3.5 h-3.5" />
@@ -545,55 +543,33 @@ export default function POSClient() {
         </div>
       </header>
 
-      {/* 💻 MAIN WORKSPACE GRID */}
+      {/* MAIN WORKSPACE GRID */}
       <div className="flex-1 flex overflow-hidden">
         {/* LEFT COLUMN: PRODUCTS & SEARCH */}
         <div className="flex-1 flex flex-col min-w-0 border-r border-slate-800/60 overflow-hidden">
-          {/* Search & Categories Bar */}
+          {/* Search Bar (Matches POS repo _Ed_Barcode / _Ed_BarcodeGrosir) */}
           <div
-            className={`p-4 border-b space-y-3 shrink-0 ${
+            className={`p-4 border-b shrink-0 ${
               isDark ? 'border-slate-800 bg-slate-900/60' : 'border-slate-200 bg-slate-50'
             }`}
           >
-            <div className="flex items-center gap-3">
-              {/* Barcode Search Input */}
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Cari Produk / Scan Barcode (F2)..."
-                  className={`w-full pl-10 pr-10 py-2.5 rounded-xl text-sm font-medium border outline-none transition-all ${
-                    isDark
-                      ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-amber-500 ring-amber-500/20'
-                      : 'bg-white border-slate-200 text-slate-900 focus:border-amber-500'
-                  }`}
-                />
-                <kbd className="absolute right-3 top-3 text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded-xs font-mono">
-                  F2
-                </kbd>
-              </div>
-            </div>
-
-            {/* Category Chips */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-              {categories.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                    selectedCategory === cat
-                      ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                      : isDark
-                      ? 'bg-slate-800/60 hover:bg-slate-800 text-slate-300 border border-slate-700/60'
-                      : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Cari Produk / Scan Barcode (F2)..."
+                className={`w-full pl-10 pr-10 py-2.5 rounded-xl text-sm font-medium border outline-none transition-all ${
+                  isDark
+                    ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-amber-500 ring-amber-500/20'
+                    : 'bg-white border-slate-200 text-slate-900 focus:border-amber-500'
+                }`}
+              />
+              <kbd className="absolute right-3 top-3 text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded-xs font-mono">
+                F2
+              </kbd>
             </div>
           </div>
 
@@ -615,7 +591,7 @@ export default function POSClient() {
                   <div
                     key={prod.id}
                     onClick={() => addToCart(prod)}
-                    className={`p-3.5 rounded-2xl border flex flex-col justify-between cursor-pointer transition-all duration-200 group hover:scale-[1.02] active:scale-95 shadow-sm ${
+                    className={`cursor-pointer p-3.5 rounded-2xl border flex flex-col justify-between transition-all duration-200 group hover:scale-[1.02] active:scale-95 shadow-sm ${
                       isDark
                         ? 'bg-slate-900/80 border-slate-800/80 hover:border-amber-500/60 hover:bg-slate-800/80 text-slate-100'
                         : 'bg-white border-slate-200 hover:border-amber-500/60 hover:shadow-md text-slate-900'
@@ -655,7 +631,7 @@ export default function POSClient() {
                           )}
                         </span>
                       </div>
-                      <div className="w-7 h-7 rounded-xl bg-amber-500/10 text-amber-500 group-hover:bg-amber-500 group-hover:text-slate-950 transition-colors flex items-center justify-center">
+                      <div className="cursor-pointer w-7 h-7 rounded-xl bg-amber-500/10 text-amber-500 group-hover:bg-amber-500 group-hover:text-slate-950 transition-colors flex items-center justify-center">
                         <Plus className="w-4 h-4 stroke-[3]" />
                       </div>
                     </div>
@@ -692,7 +668,7 @@ export default function POSClient() {
             {cart.length > 0 && (
               <button
                 onClick={() => setCart([])}
-                className="text-xs font-semibold text-rose-400 hover:text-rose-300 p-1.5 rounded-lg hover:bg-rose-500/10 transition-colors"
+                className="cursor-pointer text-xs font-semibold text-rose-400 hover:text-rose-300 p-1.5 rounded-lg hover:bg-rose-500/10 active:scale-95 transition-colors"
               >
                 Kosongkan
               </button>
@@ -752,14 +728,14 @@ export default function POSClient() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setMemoItem(item)}
-                          className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold flex items-center gap-1"
+                          className="cursor-pointer px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold flex items-center gap-1 active:scale-95 transition-all"
                         >
                           <FileText className="w-3 h-3 text-amber-400" />
                           <span>Note</span>
                         </button>
                         <button
                           onClick={() => setVoidItem(item)}
-                          className="px-2 py-1 rounded-lg bg-rose-950/30 hover:bg-rose-900/40 text-rose-400 text-[10px] font-bold flex items-center gap-1"
+                          className="cursor-pointer px-2 py-1 rounded-lg bg-rose-950/30 hover:bg-rose-900/40 text-rose-400 text-[10px] font-bold flex items-center gap-1 active:scale-95 transition-all"
                         >
                           <ShieldAlert className="w-3 h-3" />
                           <span>Void</span>
@@ -770,14 +746,14 @@ export default function POSClient() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => updateQty(idx, -1)}
-                          className="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center font-bold text-xs"
+                          className="cursor-pointer w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center font-bold text-xs active:scale-95 transition-all"
                         >
                           <Minus className="w-3 h-3" />
                         </button>
                         <span className="font-bold text-xs w-5 text-center">{item.quantity}</span>
                         <button
                           onClick={() => updateQty(idx, 1)}
-                          className="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center font-bold text-xs"
+                          className="cursor-pointer w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center font-bold text-xs active:scale-95 transition-all"
                         >
                           <Plus className="w-3 h-3" />
                         </button>
@@ -796,7 +772,7 @@ export default function POSClient() {
                 <button
                   key={btn}
                   onClick={() => handleNumpadInput(btn)}
-                  className="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-100 text-center font-bold transition-all border border-slate-700/60"
+                  className="cursor-pointer py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-100 text-center font-bold transition-all border border-slate-700/60"
                 >
                   {btn}
                 </button>
@@ -866,7 +842,7 @@ export default function POSClient() {
                   <button
                     key={idx}
                     onClick={() => setQuickPaid(amt)}
-                    className={`py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${
+                    className={`cursor-pointer py-1.5 rounded-lg text-[11px] font-bold border transition-all active:scale-95 ${
                       cashPaid === amt
                         ? 'bg-amber-500 text-slate-950 border-amber-400'
                         : isDark
@@ -902,7 +878,7 @@ export default function POSClient() {
             <button
               onClick={handleCheckout}
               disabled={activeCartItems.length === 0}
-              className="w-full py-3 rounded-xl font-black text-sm bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 hover:from-amber-400 hover:to-yellow-400 active:scale-98 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="cursor-pointer w-full py-3 rounded-xl font-black text-sm bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 hover:from-amber-400 hover:to-yellow-400 active:scale-98 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               <Receipt className="w-5 h-5" />
               <span>Bayar & Simpan (F9)</span>
@@ -969,7 +945,7 @@ export default function POSClient() {
         cashierName={currentUser?.name || 'Kasir'}
         cashPaid={numPaid}
         invoiceNo={lastInvoiceNo || `INV-${Date.now().toString().slice(-6)}`}
-        orderType={isGrosirMode ? 'Takeaway' : 'Takeaway'}
+        orderType={isGrosirMode ? 'Grosir' : 'Retail'}
         customer={selectedCustomer}
         paymentMethod={paymentMethod}
         discountAmount={totalDiscount}

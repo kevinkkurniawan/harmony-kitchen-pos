@@ -55,7 +55,7 @@ export default function LoginModal({
         {onClose && (
           <button
             onClick={onClose}
-            className="absolute right-4 top-4 p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors z-10"
+            className="cursor-pointer absolute right-4 top-4 p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors z-10"
           >
             <X className="w-4 h-4" />
           </button>
@@ -79,7 +79,7 @@ export default function LoginModal({
                 key={user.id}
                 type="button"
                 onClick={() => handleQuickSelect(user)}
-                className="px-2 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg text-center font-bold hover:bg-emerald-500/30 transition-all text-xs"
+                className="cursor-pointer px-2 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg text-center font-bold hover:bg-emerald-500/30 active:scale-95 transition-all text-xs"
               >
                 {user.name}
               </button>
@@ -128,7 +128,7 @@ export default function LoginModal({
 
           <button
             type="submit"
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all active:scale-95 mt-2"
+            className="cursor-pointer w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all active:scale-95 mt-2"
           >
             <LogIn className="w-4 h-4" />
             Masuk Kasir POS

@@ -64,7 +64,7 @@ export default function SettingsModal({
           </div>
           <button
             onClick={onClose}
-            className={`p-2 rounded-xl transition-colors ${
+            className={`cursor-pointer p-2 rounded-xl transition-colors ${
               isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'
             }`}
           >
@@ -220,7 +220,7 @@ export default function SettingsModal({
             <button
               type="button"
               onClick={onClose}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold ${
+              className={`cursor-pointer px-4 py-2 rounded-xl text-xs font-semibold active:scale-95 transition-all ${
                 isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-200 text-slate-600'
               }`}
             >
@@ -228,7 +228,7 @@ export default function SettingsModal({
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl font-bold text-xs bg-sky-500 text-slate-950 hover:bg-sky-400 transition-colors shadow-lg shadow-sky-500/20 flex items-center gap-1.5"
+              className="cursor-pointer px-5 py-2 rounded-xl font-bold text-xs bg-sky-500 text-slate-950 hover:bg-sky-400 transition-all active:scale-95 shadow-lg shadow-sky-500/20 flex items-center gap-1.5"
             >
               <Save className="w-4 h-4" /> Simpan Pengaturan
             </button>

@@ -9,7 +9,7 @@ export interface Product {
   priceGrosir1: number;
   priceGrosir2: number;
   priceGrosir3: number;
-  printerTarget?: 'Kitchen' | 'Bar' | 'Pantry';
+  printerTarget?: 'Cashier' | 'Pantry' | 'LX300';
   image?: string;
 }
 
@@ -21,14 +21,6 @@ export interface CartItem {
   memo?: string;
   isVoided?: boolean;
   voidReason?: string;
-}
-
-export interface Table {
-  id: string;
-  name: string;
-  capacity: number;
-  status: 'available' | 'occupied' | 'reserved';
-  currentOrderId?: string;
 }
 
 export interface Customer {
@@ -46,9 +38,7 @@ export interface Transaction {
   date: string;
   time: string;
   cashierName: string;
-  orderType: 'Dine-In' | 'Takeaway' | 'Delivery';
-  tableNo?: string;
-  serverName?: string;
+  mode: 'Retail' | 'Grosir';
   customer?: Customer;
   items: CartItem[];
   subtotal: number;
@@ -57,7 +47,7 @@ export interface Transaction {
   taxAmount: number;
   serviceCharge: number;
   total: number;
-  paymentMethod: 'Cash' | 'QRIS' | 'DebitCard' | 'CreditCard' | 'Bon';
+  paymentMethod: 'Tunai' | 'Debit' | 'Kredit' | 'QRIS' | 'Bon';
   cashPaid: number;
   change: number;
   isGrosirMode: boolean;

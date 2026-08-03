@@ -64,13 +64,13 @@ export default function ReceiptModal({
           </div>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-slate-800 rounded-lg transition-colors text-slate-400 hover:text-white"
+            className="cursor-pointer p-1 hover:bg-slate-800 rounded-lg transition-colors text-slate-400 hover:text-white"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Modal Body / Thermal Receipt View (Matches exact POS repo format) */}
+        {/* Modal Body / Thermal Receipt View */}
         <div className="p-6 overflow-y-auto font-mono text-sm leading-tight select-none bg-slate-50 flex-1 border-b border-slate-200">
           <div className="bg-white p-6 shadow-xs rounded-xl border border-slate-200 max-w-[320px] mx-auto receipt-paper">
             {/* Header Nota */}
@@ -190,7 +190,7 @@ export default function ReceiptModal({
               </div>
             </div>
 
-            {/* Footer Nota (Matches POS repo) */}
+            {/* Footer Nota */}
             <div className="pt-4 text-center text-[10px] text-slate-600 space-y-1 font-sans">
               <p className="font-semibold uppercase tracking-wider text-slate-800">
                 BARANG YANG SUDAH DIBELI
@@ -211,13 +211,13 @@ export default function ReceiptModal({
         <div className="p-4 bg-white flex gap-3 justify-end no-print border-t border-slate-100">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium text-sm transition-colors"
+            className="cursor-pointer px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium text-sm transition-colors active:scale-95"
           >
             Tutup
           </button>
           <button
             onClick={handlePrint}
-            className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all active:scale-95"
+            className="cursor-pointer px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all active:scale-95"
           >
             <Printer className="w-4 h-4" />
             Cetak Nota Struk
