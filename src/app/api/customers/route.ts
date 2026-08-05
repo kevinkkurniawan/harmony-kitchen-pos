@@ -21,6 +21,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ success: true, data: customers });
   } catch (err: any) {
+    console.error('Failed to fetch customers from PostgreSQL database:', err);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }

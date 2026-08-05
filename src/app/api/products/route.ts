@@ -5,10 +5,9 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q')?.trim().toLowerCase() || '';
-    const limit = Number(searchParams.get('limit')) || 40;
+    const limit = Number(searchParams.get('limit')) || 100;
 
     const whereCondition: any = {};
-
     if (query) {
       whereCondition.OR = [
         { name: { contains: query, mode: 'insensitive' } },
@@ -28,11 +27,8 @@ export async function GET(request: Request) {
       updatedAt: new Date().toISOString(),
     });
   } catch (err: any) {
-    console.error('Failed to fetch products from PostgreSQL:', err);
-    return NextResponse.json(
-      { success: false, error: err.message || 'Database error' },
-      { status: 500 }
-    );
+    console.error('Failed to fetch products from PostgreSQL database:', err);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
 
