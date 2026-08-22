@@ -1,11 +1,12 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getPaginationParams, createPaginatedResponse } from '@/lib/pagination';
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q')?.trim().toLowerCase() || '';
-    const limit = Number(searchParams.get('limit')) || 100;
+    const paginationParams = getPaginationParams(request, 100, 2000);
 
     const whereCondition: any = {};
     if (query) {
@@ -15,15 +16,17 @@ export async function GET(request: Request) {
       ];
     }
 
-    const products = await prisma.product.findMany({
-      where: whereCondition,
-      orderBy: { name: 'asc' },
-      take: limit,
-    });
+    const [total, products] = await Promise.all([
+      prisma.product.count({ where: whereCondition }),
+      prisma.product.findMany({
+        where: whereCondition,
+        orderBy: { name: 'asc' },
+        skip: paginationParams.skip,
+        take: paginationParams.limit,
+      }),
+    ]);
 
-    return NextResponse.json({
-      success: true,
-      data: products,
+    return createPaginatedResponse(products, total, paginationParams, {
       updatedAt: new Date().toISOString(),
     });
   } catch (err: any) {

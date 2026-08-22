@@ -1,20 +1,39 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getPaginationParams, createPaginatedResponse } from '@/lib/pagination';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const transactions = await prisma.transaction.findMany({
-      include: {
-        customer: true,
-        items: {
-          include: { product: true },
-        },
-      },
-      orderBy: { date: 'desc' },
-      take: 50,
-    });
+    const { searchParams } = new URL(request.url);
+    const q = searchParams.get('q') || '';
+    const paginationParams = getPaginationParams(request, 50, 1000);
 
-    return NextResponse.json({ success: true, data: transactions });
+    const where = q
+      ? {
+          OR: [
+            { invoiceNo: { contains: q, mode: 'insensitive' as const } },
+            { cashierName: { contains: q, mode: 'insensitive' as const } },
+          ],
+        }
+      : undefined;
+
+    const [total, transactions] = await Promise.all([
+      prisma.transaction.count({ where }),
+      prisma.transaction.findMany({
+        where,
+        include: {
+          customer: true,
+          items: {
+            include: { product: true },
+          },
+        },
+        orderBy: { date: 'desc' },
+        skip: paginationParams.skip,
+        take: paginationParams.limit,
+      }),
+    ]);
+
+    return createPaginatedResponse(transactions, total, paginationParams);
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
