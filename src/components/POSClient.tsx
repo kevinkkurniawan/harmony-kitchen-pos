@@ -27,7 +27,6 @@ import {
   QrCode,
   Sparkles,
   Settings,
-  Calculator,
   Database,
   Repeat,
   LogOut,
@@ -79,7 +78,6 @@ export default function POSClient() {
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isGrosirMode, setIsGrosirMode] = useState(false);
-  const [showTouchNumpad, setShowTouchNumpad] = useState(false);
 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'QRIS' | 'DebitCard' | 'CreditCard' | 'Bon'>('Cash');
@@ -379,20 +377,6 @@ export default function POSClient() {
     );
   };
 
-  const handleNumpadInput = (key: string) => {
-    if (key === 'C') {
-      setCashPaid('');
-    } else if (key === '←') {
-      const current = String(cashPaid);
-      if (current.length <= 1) setCashPaid('');
-      else setCashPaid(Number(current.slice(0, -1)));
-    } else if (key === '000') {
-      setCashPaid(Number(String(cashPaid || 0) + '000'));
-    } else {
-      setCashPaid(Number(String(cashPaid || '') + key));
-    }
-  };
-
   const activeCartItems = cart.filter((item) => !item.isVoided);
   const rawSubtotal = activeCartItems.reduce((sum, item) => sum + item.selectedPrice * item.quantity, 0);
   
@@ -529,15 +513,19 @@ export default function POSClient() {
             onClick={() => setIsMemberModalOpen(true)}
             className={`cursor-pointer px-3 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all active:scale-95 ${
               selectedCustomer
-                ? 'bg-blue-500/20 text-blue-400 border-blue-500/40 hover:bg-blue-500/30'
+                ? 'bg-blue-500/20 text-blue-500 border-blue-500/40 hover:bg-blue-500/30'
                 : isDark
                 ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300 shadow-xs'
             }`}
           >
-            <UserCheck className="w-3.5 h-3.5 text-blue-400" />
+            <UserCheck className="w-3.5 h-3.5 text-blue-500" />
             <span>{selectedCustomer ? selectedCustomer.name : 'Member / Pelanggan'}</span>
-            <kbd className="hidden lg:inline text-[9px] bg-slate-950/40 px-1.5 py-0.5 rounded-xs text-slate-400">F8</kbd>
+            <kbd className={`hidden lg:inline text-[9px] px-1.5 py-0.5 rounded font-mono font-bold ${
+              isDark ? 'bg-slate-950/60 text-slate-300 border border-slate-700/60' : 'bg-slate-100 text-slate-700 border border-slate-300'
+            }`}>
+              F8
+            </kbd>
           </button>
 
           {/* Daily Shift Summary Report Button (F10) */}
@@ -546,12 +534,16 @@ export default function POSClient() {
             className={`cursor-pointer px-3 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all active:scale-95 ${
               isDark
                 ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300 shadow-xs'
             }`}
           >
-            <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+            <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
             <span>Laporan Shift</span>
-            <kbd className="hidden lg:inline text-[9px] bg-slate-950/40 px-1.5 py-0.5 rounded-xs text-slate-400">F10</kbd>
+            <kbd className={`hidden lg:inline text-[9px] px-1.5 py-0.5 rounded font-mono font-bold ${
+              isDark ? 'bg-slate-950/60 text-slate-300 border border-slate-700/60' : 'bg-slate-100 text-slate-700 border border-slate-300'
+            }`}>
+              F10
+            </kbd>
           </button>
 
           {/* Settings Button */}
@@ -565,21 +557,6 @@ export default function POSClient() {
             title="Pengaturan POS & Printer"
           >
             <Settings className="w-4 h-4 text-sky-400" />
-          </button>
-
-          {/* Touch Numpad Toggle */}
-          <button
-            onClick={() => setShowTouchNumpad(!showTouchNumpad)}
-            className={`cursor-pointer p-2 rounded-xl border transition-all active:scale-95 ${
-              showTouchNumpad
-                ? 'bg-amber-500/20 border-amber-500 text-amber-400'
-                : isDark
-                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
-            }`}
-            title="Keyboard Touch Virtual"
-          >
-            <Calculator className="w-4 h-4" />
           </button>
 
           {/* Theme & Refresh */}
@@ -648,7 +625,9 @@ export default function POSClient() {
                     : 'bg-white border-slate-200 text-slate-900 focus:border-amber-500'
                 }`}
               />
-              <kbd className="absolute right-3 top-3 text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded-xs font-mono">
+              <kbd className={`absolute right-3 top-3 text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
+                isDark ? 'bg-slate-800 text-slate-300 border border-slate-700' : 'bg-slate-200 text-slate-700 border border-slate-300'
+              }`}>
                 F2
               </kbd>
             </div>
@@ -680,7 +659,7 @@ export default function POSClient() {
                   >
                     <div>
                       <div className="flex items-center justify-between text-[11px] mb-1.5">
-                        <span className="text-slate-400 font-mono truncate max-w-[100px]">
+                        <span className={`${isDark ? 'text-slate-400' : 'text-slate-600'} font-mono truncate max-w-[100px]`}>
                           {prod.barcode}
                         </span>
                         <span
@@ -702,7 +681,7 @@ export default function POSClient() {
 
                     <div className="pt-2 border-t border-slate-800/40 flex items-end justify-between mt-2">
                       <div>
-                        <span className="text-[10px] text-slate-400 block font-medium">
+                        <span className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-600'} block font-medium`}>
                           {isGrosirMode ? 'Harga Grosir (Min 12)' : 'Harga Retail'}
                         </span>
                         <span className="font-extrabold text-sm text-amber-500">
@@ -741,7 +720,7 @@ export default function POSClient() {
               </div>
               <div>
                 <h2 className="font-bold text-base">Keranjang Transaksi ({isGrosirMode ? 'Grosir' : 'Retail'})</h2>
-                <p className="text-xs text-slate-400">
+                <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
                   {activeCartItems.length} Item Unique • Total Qty: {totalItemsCount}
                 </p>
               </div>
@@ -759,8 +738,8 @@ export default function POSClient() {
           {/* Cart Items List */}
           <div className="flex-1 p-4 overflow-y-auto space-y-3">
             {cart.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-2 italic">
-                <ShoppingCart className="w-12 h-12 stroke-1 text-slate-600" />
+              <div className={`h-full flex flex-col items-center justify-center ${isDark ? 'text-slate-500' : 'text-slate-600'} gap-2 italic`}>
+                <ShoppingCart className={`w-12 h-12 stroke-1 ${isDark ? 'text-slate-600' : 'text-slate-400'}`} />
                 <span className="text-sm font-semibold">Keranjang masih kosong</span>
                 <span className="text-xs">Klik produk di kiri untuk menambahkan</span>
               </div>
@@ -773,15 +752,15 @@ export default function POSClient() {
                       ? 'opacity-40 line-through border-rose-800/40 bg-rose-950/10'
                       : isDark
                       ? 'bg-slate-950/60 border-slate-800'
-                      : 'bg-slate-50 border-slate-200'
+                      : 'bg-white border-slate-200'
                   }`}
                 >
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <h4 className="font-bold text-xs text-slate-200 line-clamp-1">
+                      <h4 className={`font-bold text-xs ${isDark ? 'text-slate-200' : 'text-slate-900'} line-clamp-1`}>
                         {item.product.name}
                       </h4>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
+                      <div className={`flex items-center gap-2 text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-600'} mt-0.5`}>
                         <span>Rp {item.selectedPrice.toLocaleString('id-ID')}</span>
                         {isGrosirMode && (
                           <span className="px-1.5 py-0.2 rounded-xs bg-amber-500/10 text-amber-400 text-[10px] font-bold">
@@ -791,7 +770,7 @@ export default function POSClient() {
                       </div>
                     </div>
 
-                    <span className="font-extrabold text-sm text-amber-400">
+                    <span className="font-extrabold text-sm text-amber-500">
                       Rp {(item.selectedPrice * item.quantity).toLocaleString('id-ID')}
                     </span>
                   </div>
@@ -805,13 +784,13 @@ export default function POSClient() {
 
                   {/* Item Actions Toolbar */}
                   {!item.isVoided && (
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-800/40">
+                    <div className={`flex items-center justify-between pt-2 border-t ${isDark ? 'border-slate-800/40' : 'border-slate-100'}`}>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setMemoItem(item)}
-                          className="cursor-pointer px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold flex items-center gap-1 active:scale-95 transition-all"
+                          className={`cursor-pointer px-2 py-1 rounded-lg ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'} text-[10px] font-bold flex items-center gap-1 active:scale-95 transition-all`}
                         >
-                          <FileText className="w-3 h-3 text-amber-400" />
+                          <FileText className="w-3 h-3 text-amber-500" />
                           <span>Note</span>
                         </button>
                         <button
@@ -827,14 +806,14 @@ export default function POSClient() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => updateQty(idx, -1)}
-                          className="cursor-pointer w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center font-bold text-xs active:scale-95 transition-all"
+                          className={`cursor-pointer w-6 h-6 rounded-lg ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'} flex items-center justify-center font-bold text-xs active:scale-95 transition-all`}
                         >
                           <Minus className="w-3 h-3" />
                         </button>
                         <span className="font-bold text-xs w-5 text-center">{item.quantity}</span>
                         <button
                           onClick={() => updateQty(idx, 1)}
-                          className="cursor-pointer w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center font-bold text-xs active:scale-95 transition-all"
+                          className={`cursor-pointer w-6 h-6 rounded-lg ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'} flex items-center justify-center font-bold text-xs active:scale-95 transition-all`}
                         >
                           <Plus className="w-3 h-3" />
                         </button>
@@ -846,34 +825,19 @@ export default function POSClient() {
             )}
           </div>
 
-          {/* Touch Numpad */}
-          {showTouchNumpad && (
-            <div className="p-3 border-t border-slate-800 bg-slate-950/90 shrink-0 grid grid-cols-4 gap-1.5 text-xs font-bold">
-              {['7', '8', '9', 'C', '4', '5', '6', '←', '1', '2', '3', '000', '0', '00'].map((btn) => (
-                <button
-                  key={btn}
-                  onClick={() => handleNumpadInput(btn)}
-                  className="cursor-pointer py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-100 text-center font-bold transition-all border border-slate-700/60"
-                >
-                  {btn}
-                </button>
-              ))}
-            </div>
-          )}
-
           {/* Checkout & Summary Panel */}
           <div
             className={`p-4 border-t space-y-3 shrink-0 ${
-              isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'
+              isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white'
             }`}
           >
             {/* Customer Banner */}
             {selectedCustomer && (
               <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-between text-xs">
-                <span className="font-bold text-blue-400">
+                <span className="font-bold text-blue-500">
                   Pelanggan: {selectedCustomer.name}
                 </span>
-                <span className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full font-bold">
+                <span className="text-[10px] bg-blue-500/20 text-blue-500 px-2 py-0.5 rounded-full font-bold">
                   Diskon {selectedCustomer.discountPercent}%
                 </span>
               </div>
@@ -881,41 +845,41 @@ export default function POSClient() {
 
             {/* Summary Lines */}
             <div className="space-y-1 text-xs">
-              <div className="flex justify-between text-slate-400">
+              <div className={`flex justify-between ${isDark ? 'text-slate-400' : 'text-slate-700'} font-medium`}>
                 <span>Subtotal</span>
                 <span>Rp {rawSubtotal.toLocaleString('id-ID')}</span>
               </div>
 
               {totalDiscount > 0 && (
-                <div className="flex justify-between text-rose-400 font-medium">
+                <div className="flex justify-between text-rose-500 font-bold">
                   <span>Diskon Member / Voucher</span>
                   <span>- Rp {totalDiscount.toLocaleString('id-ID')}</span>
                 </div>
               )}
 
               {taxAmount > 0 && (
-                <div className="flex justify-between text-slate-400">
+                <div className={`flex justify-between ${isDark ? 'text-slate-400' : 'text-slate-700'} font-medium`}>
                   <span>Pajak ({posSettings.taxPercent}%)</span>
                   <span>Rp {taxAmount.toLocaleString('id-ID')}</span>
                 </div>
               )}
 
               {serviceAmount > 0 && (
-                <div className="flex justify-between text-slate-400">
+                <div className={`flex justify-between ${isDark ? 'text-slate-400' : 'text-slate-700'} font-medium`}>
                   <span>Service ({posSettings.servicePercent}%)</span>
                   <span>Rp {serviceAmount.toLocaleString('id-ID')}</span>
                 </div>
               )}
 
-              <div className="flex justify-between text-base font-black text-slate-100 pt-1 border-t border-slate-800">
+              <div className={`flex justify-between text-base font-black pt-1 border-t ${isDark ? 'text-slate-100 border-slate-800' : 'text-slate-900 border-slate-200'}`}>
                 <span>Total Tagihan</span>
-                <span className="text-amber-400">Rp {grandTotal.toLocaleString('id-ID')}</span>
+                <span className="text-amber-500">Rp {grandTotal.toLocaleString('id-ID')}</span>
               </div>
             </div>
 
             {/* Quick Cash Presets */}
             <div>
-              <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5 block">
+              <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-700'} mb-1.5 block`}>
                 Nominal Bayar Cepat
               </label>
               <div className="grid grid-cols-4 gap-1.5">
@@ -950,7 +914,11 @@ export default function POSClient() {
                     : 'bg-white border-slate-200 text-slate-900 focus:border-amber-500'
                 }`}
               />
-              <div className="flex items-center px-3 rounded-xl bg-slate-800 text-xs font-extrabold text-emerald-400">
+              <div className={`flex items-center px-3 py-2 rounded-xl text-xs font-extrabold border transition-all ${
+                isDark
+                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                  : 'bg-emerald-50 border-emerald-300 text-emerald-700'
+              }`}>
                 Kembali: Rp {changeAmount.toLocaleString('id-ID')}
               </div>
             </div>
