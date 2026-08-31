@@ -58,7 +58,7 @@ export default function SettingsModal({
               <Settings className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold">Pengaturan POS & Printer (Frm_ChangeSetting)</h2>
+              <h2 className="text-base font-bold">Pengaturan Sistem Kasir & Printer</h2>
               <p className="text-xs text-slate-400">Konfigurasi Printer Struk, Dot Matrix, Pajak & Toko</p>
             </div>
           </div>

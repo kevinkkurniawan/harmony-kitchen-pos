@@ -35,8 +35,8 @@ export default function VoidReasonModal({
   if (!isOpen || !item) return null;
 
   const handleConfirm = () => {
-    if (pin.trim().length < 4) {
-      setError('Masukkan 4 digit PIN Otorisasi Supervisor!');
+    if (pin.trim().length < 3) {
+      setError('Masukkan Password Otorisasi Supervisor!');
       return;
     }
 
@@ -98,14 +98,14 @@ export default function VoidReasonModal({
 
           <div>
             <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 block flex items-center gap-1.5">
-              <KeyRound className="w-3.5 h-3.5 text-rose-400" /> PIN Otorisasi Supervisor
+              <KeyRound className="w-3.5 h-3.5 text-rose-400" /> Password Otorisasi Supervisor
             </label>
             <input
               type="password"
-              maxLength={6}
+              maxLength={20}
               value={pin}
               onChange={(e) => setPin(e.target.value)}
-              placeholder="Masukkan PIN (Default: 1234)"
+              placeholder="Masukkan Password"
               className={`w-full p-3 rounded-xl font-mono text-center tracking-widest text-lg border outline-none transition-all ${
                 isDark
                   ? 'bg-slate-800 border-slate-700 text-slate-100 focus:border-rose-500'

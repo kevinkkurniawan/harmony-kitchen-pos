@@ -30,6 +30,8 @@ import {
   Calculator,
   Database,
   Repeat,
+  LogOut,
+  LogIn,
 } from 'lucide-react';
 import { Product, CartItem, Customer, ShiftSummary } from '@/types/pos';
 import { MOCK_POS_USERS, POSUser } from '@/types/user';
@@ -67,8 +69,8 @@ function HighlightText({ text, query, isDark }: { text: string; query: string; i
 }
 
 export default function POSClient() {
-  const [currentUser, setCurrentUser] = useState<POSUser | null>(MOCK_POS_USERS[0]);
-  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<POSUser | null>(null);
+  const [isLoginOpen, setIsLoginOpen] = useState(true);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -138,6 +140,63 @@ export default function POSClient() {
     }, 150);
     return () => clearTimeout(timer);
   }, [searchQuery, fetchProducts]);
+
+  // Restore persistent state from localStorage on mount (prevents data loss on browser refresh)
+  useEffect(() => {
+    try {
+      const savedUser = localStorage.getItem('hk_pos_user');
+      if (savedUser) {
+        const user = JSON.parse(savedUser);
+        setCurrentUser(user);
+        setIsLoginOpen(false);
+      }
+
+      const savedCart = localStorage.getItem('hk_pos_cart');
+      if (savedCart) {
+        setCart(JSON.parse(savedCart));
+      }
+
+      const savedMode = localStorage.getItem('hk_pos_grosir_mode');
+      if (savedMode !== null) {
+        setIsGrosirMode(JSON.parse(savedMode));
+      }
+
+      const savedCustomer = localStorage.getItem('hk_pos_customer');
+      if (savedCustomer) {
+        setSelectedCustomer(JSON.parse(savedCustomer));
+      }
+    } catch (e) {
+      console.error('Failed to restore POS state from localStorage:', e);
+    }
+  }, []);
+
+  // Sync currentUser to localStorage
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('hk_pos_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('hk_pos_user');
+    }
+  }, [currentUser]);
+
+  // Sync cart to localStorage
+  useEffect(() => {
+    localStorage.setItem('hk_pos_cart', JSON.stringify(cart));
+  }, [cart]);
+
+  // Sync Grosir Mode to localStorage
+  useEffect(() => {
+    localStorage.setItem('hk_pos_grosir_mode', JSON.stringify(isGrosirMode));
+  }, [isGrosirMode]);
+
+  // Sync selectedCustomer to localStorage
+  useEffect(() => {
+    if (selectedCustomer) {
+      localStorage.setItem('hk_pos_customer', JSON.stringify(selectedCustomer));
+    } else {
+      localStorage.removeItem('hk_pos_customer');
+    }
+  }, [selectedCustomer]);
 
   // Auto focus search input on mount for barcode scanner readiness
   useEffect(() => {
@@ -390,6 +449,12 @@ export default function POSClient() {
     setIsReceiptOpen(true);
   };
 
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('hk_pos_user');
+    setIsLoginOpen(true);
+  };
+
   const isDark = theme === 'dark';
 
   const mockShiftSummary: ShiftSummary = {
@@ -436,29 +501,23 @@ export default function POSClient() {
             <div>
               <h1 className="font-extrabold text-base tracking-tight flex items-center gap-2">
                 {posSettings.storeName}
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-bold border border-emerald-500/30 flex items-center gap-1">
-                  <Database className="w-3 h-3 text-emerald-400" /> PostgreSQL 17
-                </span>
               </h1>
               <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                {posSettings.storeAddress} • Kasir:{' '}
-                <span className="text-emerald-500 font-extrabold">
-                  {currentUser ? currentUser.name : 'Belum Login'}
-                </span>
+                {posSettings.storeAddress}
               </p>
             </div>
           </div>
 
           <div className={`h-6 w-px hidden md:block ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
 
-          {/* Switch Cashier Account */}
+          {/* Clean Cashier Account Button */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsLoginOpen(true)}
               className="cursor-pointer px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 hover:bg-emerald-500/25 active:scale-95 transition-all"
             >
               <UserIcon className="w-3.5 h-3.5" />
-              <span>Ganti Kasir ({currentUser?.username || 'Login'})</span>
+              <span>Kasir: {currentUser ? currentUser.name : 'Belum Login'}</span>
             </button>
           </div>
         </div>
@@ -503,7 +562,7 @@ export default function POSClient() {
                 ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
             }`}
-            title="Pengaturan POS & Printer (Frm_ChangeSetting)"
+            title="Pengaturan POS & Printer"
           >
             <Settings className="w-4 h-4 text-sky-400" />
           </button>
@@ -912,12 +971,14 @@ export default function POSClient() {
       {/* ALL MODALS INTEGRATED */}
       <LoginModal
         isOpen={isLoginOpen}
-        onClose={() => setIsLoginOpen(false)}
+        onClose={currentUser ? () => setIsLoginOpen(false) : undefined}
         onSelectUser={(user) => {
           setCurrentUser(user);
           setIsLoginOpen(false);
+          setTimeout(() => searchInputRef.current?.focus(), 100);
         }}
-        currentUsername={currentUser?.username || ''}
+        currentUser={currentUser}
+        onLogout={handleLogout}
       />
 
       <MemberValidationModal
