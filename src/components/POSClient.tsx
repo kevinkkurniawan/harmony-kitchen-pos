@@ -139,6 +139,27 @@ export default function POSClient() {
     return () => clearTimeout(timer);
   }, [searchQuery, fetchProducts]);
 
+  // Auto focus search input on mount for barcode scanner readiness
+  useEffect(() => {
+    searchInputRef.current?.focus();
+  }, []);
+
+  // Handle Barcode Scanner Enter Key (Matches EPPOS EP1400C behavior)
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && searchQuery.trim()) {
+      e.preventDefault();
+      const exactMatch =
+        products.find(
+          (p) => p.barcode.toLowerCase() === searchQuery.trim().toLowerCase()
+        ) || (products.length === 1 ? products[0] : null);
+
+      if (exactMatch) {
+        addToCart(exactMatch);
+        setSearchQuery('');
+      }
+    }
+  };
+
   // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -560,6 +581,7 @@ export default function POSClient() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
                 placeholder="Cari Produk / Scan Barcode (F2)..."
                 className={`w-full pl-10 pr-10 py-2.5 rounded-xl text-sm font-medium border outline-none transition-all ${
                   isDark

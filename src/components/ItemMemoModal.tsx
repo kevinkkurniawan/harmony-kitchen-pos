@@ -13,14 +13,14 @@ interface ItemMemoModalProps {
 }
 
 const PRESET_MEMOS = [
-  'Sedang / Mild',
-  'Pedas / Spicy',
-  'Extra Pedas',
-  'Tanpa Bawang',
-  'Tanpa Es',
-  'Sedikit Es',
-  'Takeaway Terpisah',
-  'Jangan Terlalu Manis',
+  'Ambil di Gudang',
+  'Garansi Toko 1 Tahun',
+  'Warna Custom',
+  'Karton / Box Utuh',
+  'Cek Fisik / Mulus',
+  'Bubble Wrap Extra',
+  'Pengiriman Terpisah',
+  'Barang Sample / Display',
 ];
 
 export default function ItemMemoModal({
@@ -61,7 +61,7 @@ export default function ItemMemoModal({
               <FileText className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold">Catatan Dapur / Memo Item</h2>
+              <h2 className="text-base font-bold">Catatan Produk / Memo Item</h2>
               <p className="text-xs text-slate-400">{item.product.name}</p>
             </div>
           </div>
@@ -79,13 +79,13 @@ export default function ItemMemoModal({
         <div className="p-6 space-y-4">
           <div>
             <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 block">
-              Catatan Instruksi Khusus (Kitchen Note)
+              Catatan Khusus Produk (Product Note)
             </label>
             <textarea
               rows={3}
               value={memo}
               onChange={(e) => setMemo(e.target.value)}
-              placeholder="Contoh: Less spicy, no onion, extra sauce..."
+              placeholder="Contoh: Garansi toko 1 tahun, warna hitam, barang display..."
               className={`w-full p-3 rounded-xl text-sm border outline-none transition-all ${
                 isDark
                   ? 'bg-slate-800 border-slate-700 text-slate-100 focus:border-amber-500'

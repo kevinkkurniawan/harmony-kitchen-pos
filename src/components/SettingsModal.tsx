@@ -59,7 +59,7 @@ export default function SettingsModal({
             </div>
             <div>
               <h2 className="text-base font-bold">Pengaturan POS & Printer (Frm_ChangeSetting)</h2>
-              <p className="text-xs text-slate-400">Konfigurasi Printer Dapur, Pajak, Service Charge & Toko</p>
+              <p className="text-xs text-slate-400">Konfigurasi Printer Struk, Dot Matrix, Pajak & Toko</p>
             </div>
           </div>
           <button
@@ -131,7 +131,7 @@ export default function SettingsModal({
             </h3>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[11px] font-medium text-slate-400 block mb-1">Pajak PB1 / PPN (%)</label>
+                <label className="text-[11px] font-medium text-slate-400 block mb-1">Pajak PPN (%)</label>
                 <input
                   type="number"
                   min={0}
@@ -145,7 +145,7 @@ export default function SettingsModal({
               </div>
 
               <div>
-                <label className="text-[11px] font-medium text-slate-400 block mb-1">Service Charge (%)</label>
+                <label className="text-[11px] font-medium text-slate-400 block mb-1">Biaya Layanan / Service (%)</label>
                 <input
                   type="number"
                   min={0}
@@ -163,11 +163,11 @@ export default function SettingsModal({
           {/* Section 3: Hardware Printer Routing */}
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
-              <Printer className="w-3.5 h-3.5 text-sky-400" /> Routing Printer Perangkat Kasir & Dapur
+              <Printer className="w-3.5 h-3.5 text-sky-400" /> Routing Printer Kasir & Nota
             </h3>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[11px] font-medium text-slate-400 block mb-1">Printer Kasir (Thermal)</label>
+                <label className="text-[11px] font-medium text-slate-400 block mb-1">Printer Kasir Utama (Thermal)</label>
                 <input
                   type="text"
                   value={formData.printerCashier}
@@ -179,7 +179,7 @@ export default function SettingsModal({
               </div>
 
               <div>
-                <label className="text-[11px] font-medium text-slate-400 block mb-1">Printer Dapur (Kitchen)</label>
+                <label className="text-[11px] font-medium text-slate-400 block mb-1">Printer Nota Grosir (Continuous)</label>
                 <input
                   type="text"
                   value={formData.printerKitchen}
@@ -191,7 +191,7 @@ export default function SettingsModal({
               </div>
 
               <div>
-                <label className="text-[11px] font-medium text-slate-400 block mb-1">Printer Bar (Minuman)</label>
+                <label className="text-[11px] font-medium text-slate-400 block mb-1">Printer Surat Jalan (LX-300)</label>
                 <input
                   type="text"
                   value={formData.printerBar}
@@ -203,7 +203,7 @@ export default function SettingsModal({
               </div>
 
               <div>
-                <label className="text-[11px] font-medium text-slate-400 block mb-1">Printer Pantry</label>
+                <label className="text-[11px] font-medium text-slate-400 block mb-1">Printer Backup / Admin</label>
                 <input
                   type="text"
                   value={formData.printerPantry}
