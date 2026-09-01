@@ -32,7 +32,7 @@ import {
   LogOut,
   LogIn,
 } from 'lucide-react';
-import { Product, CartItem, Customer, ShiftSummary } from '@/types/pos';
+import { Product, CartItem, Customer, ShiftSummary, PaymentMethod } from '@/types/pos';
 import { MOCK_POS_USERS, POSUser } from '@/types/user';
 import ReceiptModal from '@/components/ReceiptModal';
 import LoginModal from '@/components/LoginModal';
@@ -80,7 +80,7 @@ export default function POSClient() {
   const [isGrosirMode, setIsGrosirMode] = useState(false);
 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'QRIS' | 'DebitCard' | 'CreditCard' | 'Bon'>('Cash');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
   const [voucherCode, setVoucherCode] = useState('');
 
   const [posSettings, setPosSettings] = useState({
@@ -442,22 +442,26 @@ export default function POSClient() {
   const isDark = theme === 'dark';
 
   const mockShiftSummary: ShiftSummary = {
-    cashierName: currentUser?.name || 'Kasir 1',
+    cashierName: currentUser?.name || 'Kasir',
     startTime: '08:00',
     endTime: '20:30',
     totalTransactions: 24,
-    grossSales: 3450000,
-    totalDiscount: 150000,
-    netSales: 3300000,
+    grossSales: 2835000,
+    totalDiscount: 0,
+    netSales: 2835000,
     taxCollected: taxAmount,
     serviceCollected: serviceAmount,
     paymentBreakdown: {
-      cash: 1800000,
-      qris: 950000,
-      card: 550000,
-      bon: 0,
+      cash: 1620000,
+      edc: 0,
+      transfer: 0,
+      qris: 146000,
+      shopee: 1069000,
+      tokopedia: 0,
     },
-    cashInDrawer: 2300000,
+    expenses: 0,
+    cashToDeposit: 1620000,
+    cashInDrawer: 1620000,
     voidCount: cart.filter((i) => i.isVoided).length,
     voidTotalAmount: cart.filter((i) => i.isVoided).reduce((sum, i) => sum + i.selectedPrice * i.quantity, 0),
   };
@@ -874,6 +878,35 @@ export default function POSClient() {
               <div className={`flex justify-between text-base font-black pt-1 border-t ${isDark ? 'text-slate-100 border-slate-800' : 'text-slate-900 border-slate-200'}`}>
                 <span>Total Tagihan</span>
                 <span className="text-amber-500">Rp {grandTotal.toLocaleString('id-ID')}</span>
+              </div>
+            </div>
+
+            {/* Payment Method Selector */}
+            <div>
+              <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-700'} mb-1.5 block`}>
+                Metode Pembayaran
+              </label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(['CASH', 'EDC', 'TRANSFER', 'QRIS', 'SHOPEE', 'TOKOPEDIA'] as PaymentMethod[]).map((method) => (
+                  <button
+                    key={method}
+                    onClick={() => {
+                      setPaymentMethod(method);
+                      if (method !== 'CASH') {
+                        setCashPaid(grandTotal);
+                      }
+                    }}
+                    className={`cursor-pointer py-2 rounded-xl text-xs font-black border transition-all active:scale-95 ${
+                      paymentMethod === method
+                        ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/20'
+                        : isDark
+                        ? 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    {method}
+                  </button>
+                ))}
               </div>
             </div>
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { X, Printer, TrendingUp, DollarSign, CreditCard, QrCode, AlertCircle, FileText } from 'lucide-react';
+import { X, Printer, TrendingUp, DollarSign, CreditCard, QrCode, ShoppingBag, ArrowUpRight } from 'lucide-react';
 import { ShiftSummary } from '@/types/pos';
 import { POSUser } from '@/types/user';
 
@@ -26,6 +26,11 @@ export default function CashierSummaryModal({
     window.print();
   };
 
+  const currentDate = new Date();
+  const dateStr = `${currentDate.getDate().toString().padStart(2, '0')}/${(currentDate.getMonth() + 1).toString().padStart(2, '0')}/${currentDate.getFullYear()}`;
+
+  const formatMoney = (val: number) => Math.round(val).toLocaleString('id-ID');
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-xs p-4 animate-in fade-in duration-200">
       <div
@@ -33,15 +38,15 @@ export default function CashierSummaryModal({
           isDark ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
         }`}
       >
-        {/* Header */}
-        <div className={`px-6 py-4 border-b flex items-center justify-between ${isDark ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
+        {/* Header (No print) */}
+        <div className={`px-6 py-4 border-b flex items-center justify-between no-print ${isDark ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-500">
               <TrendingUp className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold">Ringkasan Shift Kasir (X-Report)</h2>
-              <p className="text-xs text-slate-400">Laporan Penjualan Harian Kasir • {currentUser?.name || 'Kasir'}</p>
+              <h2 className="text-base font-bold">Ringkasan Rekap Kasir (X-Report)</h2>
+              <p className="text-xs text-slate-400">Semua data terhitung otomatis dari transaksi sistem</p>
             </div>
           </div>
           <button
@@ -54,74 +59,80 @@ export default function CashierSummaryModal({
           </button>
         </div>
 
-        {/* Content */}
+        {/* Content Body */}
         <div className="p-6 space-y-6 overflow-y-auto max-h-[75vh]">
-          {/* Key Metrics */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className={`p-4 rounded-xl border ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-              <span className="text-xs text-slate-400 font-medium">Total Omzet Bersih</span>
-              <p className="text-xl font-black text-amber-500 mt-1">Rp {summary.netSales.toLocaleString('id-ID')}</p>
-              <span className="text-[11px] text-slate-500 mt-0.5 block">{summary.totalTransactions} Transaksi Selesai</span>
-            </div>
-
-            <div className={`p-4 rounded-xl border ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-              <span className="text-xs text-slate-400 font-medium">Uang Tunai di Laci (Drawer)</span>
-              <p className="text-xl font-black text-emerald-500 mt-1">Rp {summary.cashInDrawer.toLocaleString('id-ID')}</p>
-              <span className="text-[11px] text-slate-500 mt-0.5 block">Modal + Penerimaan Tunai</span>
-            </div>
-          </div>
-
-          {/* Breakdown by Payment Channel */}
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">
-              Rincian Metode Pembayaran
-            </h3>
-            <div className="space-y-2">
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'border-slate-800 bg-slate-800/30' : 'border-slate-200 bg-slate-50'}`}>
-                <span className="flex items-center gap-2 text-sm font-medium">
-                  <DollarSign className="w-4 h-4 text-emerald-500" /> Tunai (Cash)
-                </span>
-                <span className="font-bold text-sm">Rp {summary.paymentBreakdown.cash.toLocaleString('id-ID')}</span>
+          {/* Printable Thermal Receipt Box */}
+          <div className="bg-white text-slate-900 p-6 rounded-xl border border-slate-300 max-w-[340px] mx-auto receipt-paper font-mono text-xs leading-tight shadow-md">
+            {/* Struk Rekap Header */}
+            <div className="text-left pb-2 border-b border-slate-400 font-bold space-y-1">
+              <div className="flex justify-between uppercase">
+                <span>{currentUser?.name || summary.cashierName || 'KASIR'}</span>
+                <span>Tgl: {dateStr}</span>
               </div>
-
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'border-slate-800 bg-slate-800/30' : 'border-slate-200 bg-slate-50'}`}>
-                <span className="flex items-center gap-2 text-sm font-medium">
-                  <QrCode className="w-4 h-4 text-purple-500" /> QRIS / E-Wallet
-                </span>
-                <span className="font-bold text-sm">Rp {summary.paymentBreakdown.qris.toLocaleString('id-ID')}</span>
-              </div>
-
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'border-slate-800 bg-slate-800/30' : 'border-slate-200 bg-slate-50'}`}>
-                <span className="flex items-center gap-2 text-sm font-medium">
-                  <CreditCard className="w-4 h-4 text-blue-500" /> Kartu Debit / Kredit
-                </span>
-                <span className="font-bold text-sm">Rp {summary.paymentBreakdown.card.toLocaleString('id-ID')}</span>
-              </div>
-
-              <div className={`p-3 rounded-xl border flex items-center justify-between ${isDark ? 'border-slate-800 bg-slate-800/30' : 'border-slate-200 bg-slate-50'}`}>
-                <span className="flex items-center gap-2 text-sm font-medium">
-                  <FileText className="w-4 h-4 text-amber-500" /> Bon / Piutang
-                </span>
-                <span className="font-bold text-sm">Rp {summary.paymentBreakdown.bon.toLocaleString('id-ID')}</span>
+              <div className="flex justify-between text-sm pt-1 border-t border-slate-300">
+                <span>TOTAL OMSET</span>
+                <span>{formatMoney(summary.netSales)}</span>
               </div>
             </div>
-          </div>
 
-          {/* Void & Discount Summary */}
-          <div className={`p-4 rounded-xl border flex items-center justify-between ${isDark ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-            <div>
-              <span className="text-xs font-semibold text-slate-400">Total Void Item</span>
-              <p className="text-sm font-bold text-rose-400 mt-0.5">{summary.voidCount} Item Dibatalkan (Rp {summary.voidTotalAmount.toLocaleString('id-ID')})</p>
+            {/* Section: DEBIT */}
+            <div className="py-2 border-b border-slate-400 space-y-1">
+              <span className="font-bold uppercase text-[11px] block">DEBIT</span>
+              <div className="flex justify-between pl-2">
+                <span>EDC</span>
+                <span className="font-bold">{summary.paymentBreakdown.edc > 0 ? formatMoney(summary.paymentBreakdown.edc) : ''}</span>
+              </div>
+              <div className="flex justify-between pl-2">
+                <span>TF</span>
+                <span className="font-bold">{summary.paymentBreakdown.transfer > 0 ? formatMoney(summary.paymentBreakdown.transfer) : ''}</span>
+              </div>
             </div>
-            <div className="text-right">
-              <span className="text-xs font-semibold text-slate-400">Total Diskon</span>
-              <p className="text-sm font-bold text-amber-400 mt-0.5">Rp {summary.totalDiscount.toLocaleString('id-ID')}</p>
+
+            {/* Section: KREDIT / Marketplace */}
+            <div className="py-2 border-b border-slate-400 space-y-1">
+              <span className="font-bold uppercase text-[11px] block">KREDIT</span>
+              <div className="flex justify-between pl-2">
+                <span>SHOPEE</span>
+                <span className="font-bold">{summary.paymentBreakdown.shopee > 0 ? formatMoney(summary.paymentBreakdown.shopee) : ''}</span>
+              </div>
+              <div className="flex justify-between pl-2">
+                <span>TOKPED</span>
+                <span className="font-bold">{summary.paymentBreakdown.tokopedia > 0 ? formatMoney(summary.paymentBreakdown.tokopedia) : ''}</span>
+              </div>
+            </div>
+
+            {/* Section: QRIS */}
+            <div className="py-2 border-b border-slate-400">
+              <div className="flex justify-between font-bold uppercase">
+                <span>QRIS</span>
+                <span>{summary.paymentBreakdown.qris > 0 ? formatMoney(summary.paymentBreakdown.qris) : ''}</span>
+              </div>
+            </div>
+
+            {/* Section: CASH & PENGELUARAN */}
+            <div className="py-2 border-b border-slate-400 space-y-1">
+              <div className="flex justify-between font-bold uppercase">
+                <span>CASH</span>
+                <span>{summary.paymentBreakdown.cash > 0 ? formatMoney(summary.paymentBreakdown.cash) : ''}</span>
+              </div>
+              <div className="flex justify-between font-bold uppercase text-slate-700">
+                <span>PENGELUARAN</span>
+                <span>{summary.expenses > 0 ? formatMoney(summary.expenses) : ''}</span>
+              </div>
+            </div>
+
+            {/* Section: SETOR */}
+            <div className="pt-2">
+              <div className="flex justify-between font-extrabold text-sm uppercase">
+                <span>SETOR</span>
+                <span>{formatMoney(summary.cashToDeposit)}</span>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className={`p-4 border-t flex items-center justify-between ${isDark ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
+        {/* Footer (No print) */}
+        <div className={`p-4 border-t flex items-center justify-between no-print ${isDark ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
           <button
             onClick={onClose}
             className={`cursor-pointer px-4 py-2 rounded-xl font-medium text-sm transition-all active:scale-95 ${
@@ -134,7 +145,7 @@ export default function CashierSummaryModal({
             onClick={handlePrintReport}
             className="cursor-pointer px-5 py-2.5 rounded-xl font-bold text-sm bg-amber-500 text-slate-950 hover:bg-amber-400 transition-all active:scale-95 shadow-lg shadow-amber-500/20 flex items-center gap-2"
           >
-            <Printer className="w-4 h-4" /> Cetak Laporan (Shift Report)
+            <Printer className="w-4 h-4" /> Cetak Struk Rekap Kasir
           </button>
         </div>
       </div>

@@ -32,6 +32,8 @@ export interface Customer {
   discountPercent: number;
 }
 
+export type PaymentMethod = 'CASH' | 'EDC' | 'TRANSFER' | 'QRIS' | 'SHOPEE' | 'TOKOPEDIA';
+
 export interface Transaction {
   id: string;
   invoiceNo: string;
@@ -47,7 +49,7 @@ export interface Transaction {
   taxAmount: number;
   serviceCharge: number;
   total: number;
-  paymentMethod: 'Tunai' | 'Debit' | 'Kredit' | 'QRIS' | 'Bon';
+  paymentMethod: PaymentMethod;
   cashPaid: number;
   change: number;
   isGrosirMode: boolean;
@@ -66,10 +68,14 @@ export interface ShiftSummary {
   serviceCollected: number;
   paymentBreakdown: {
     cash: number;
+    edc: number;
+    transfer: number;
     qris: number;
-    card: number;
-    bon: number;
+    shopee: number;
+    tokopedia: number;
   };
+  expenses: number;
+  cashToDeposit: number;
   cashInDrawer: number;
   voidCount: number;
   voidTotalAmount: number;
