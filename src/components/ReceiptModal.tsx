@@ -74,35 +74,26 @@ export default function ReceiptModal({
         <div className="p-6 overflow-y-auto font-mono text-sm leading-tight select-none bg-slate-50 flex-1 border-b border-slate-200">
           <div className="bg-white p-6 shadow-xs rounded-xl border border-slate-200 max-w-[320px] mx-auto receipt-paper">
             {/* Header Nota */}
-            <div className="text-center pb-3 border-b border-dashed border-slate-400">
+            <div className="text-center pb-2 border-b border-dashed border-slate-400">
               <h2 className="font-bold text-base tracking-wide uppercase text-slate-900">
                 HARMONY KITCHENWARE
               </h2>
-              <p className="text-xs text-slate-600 mt-1">Jalan Panglima Sudirman 65</p>
-              <p className="text-xs text-slate-600">WA: 0851 7238 4707</p>
+              <p className="text-xs text-slate-700 mt-1">Jalan Panglima Sudirman 65</p>
+              <p className="text-xs text-slate-700">WA : 0851 7238 4707</p>
             </div>
 
             {/* Sub Header Nota */}
-            <div className="py-2 border-b border-dashed border-slate-400 text-[11px] space-y-1 text-slate-700">
-              <div className="flex justify-between">
-                <span>No: {invoiceNo || 'INV-LOCAL'}</span>
-                <span>{dateStr} {timeStr}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Kasir: {cashierName}</span>
-                <span>Metode: <strong className="uppercase">{paymentMethod}</strong></span>
-              </div>
-              {customer && (
-                <div className="text-blue-600 font-bold">
-                  Pelanggan: {customer.name} ({customer.customerType})
-                </div>
-              )}
+            <div className="py-2 border-b border-dashed border-slate-400 text-xs flex justify-between text-slate-800">
+              <span>{dateStr}</span>
+              <span>{timeStr}</span>
+              <span>Ksr : {cashierName}</span>
             </div>
 
             {/* Items Header */}
-            <div className="py-2 border-b border-dashed border-slate-400 text-xs font-bold flex justify-between text-slate-800">
-              <span>Barang</span>
-              <span>Sub Total</span>
+            <div className="py-1 border-b border-dashed border-slate-400 text-xs font-bold flex text-slate-800">
+              <span className="w-6 text-left shrink-0">#</span>
+              <span className="flex-1 text-left">Barang</span>
+              <span className="text-right shrink-0">Sub Total</span>
             </div>
 
             {/* Items List */}
@@ -114,22 +105,22 @@ export default function ReceiptModal({
               ) : (
                 validCart.map((item, idx) => (
                   <div key={idx} className="flex flex-col">
-                    <div className="flex justify-between items-start font-medium text-slate-900">
-                      <span className="flex-1 pr-2 break-words">
-                        {item.quantity} {item.product.name}
+                    <div className="flex items-start font-medium text-slate-900">
+                      <span className="w-6 text-left shrink-0">{item.quantity}</span>
+                      <span className="flex-1 pr-2 break-words text-left">
+                        {item.product.name}
                       </span>
-                      <span className="whitespace-nowrap font-bold">
-                        {(item.selectedPrice * item.quantity).toLocaleString('id-ID')}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-slate-500 text-[11px] pl-4">
-                      <span>@ {item.selectedPrice.toLocaleString('id-ID')} ({item.product.uom})</span>
-                      <span className="text-[10px] uppercase font-bold text-amber-600">
-                        [{item.priceType}]
+                      <span className="whitespace-nowrap font-bold text-right shrink-0">
+                        {Math.round(item.selectedPrice * item.quantity).toLocaleString('en-US')}
                       </span>
                     </div>
+                    {item.quantity > 1 && (
+                      <div className="pl-6 text-slate-600 text-[11px]">
+                        @ {Math.round(item.selectedPrice).toLocaleString('en-US')}
+                      </div>
+                    )}
                     {item.memo && (
-                      <div className="text-[11px] text-slate-600 font-sans italic pl-4">
+                      <div className="pl-6 text-[11px] text-slate-600 font-sans italic">
                         * Catatan: {item.memo}
                       </div>
                     )}
@@ -139,68 +130,52 @@ export default function ReceiptModal({
             </div>
 
             {/* Summary Details */}
-            <div className="py-3 border-b border-dashed border-slate-400 space-y-1 text-xs">
-              <div className="flex justify-between">
-                <span>{totalKinds} Jenis Item</span>
-                <div className="flex gap-4">
-                  <span className="text-slate-600">Subtotal:</span>
-                  <span className="font-bold text-slate-900">
-                    {rawSubtotal.toLocaleString('id-ID')}
-                  </span>
+            <div className="py-2 border-b border-dashed border-slate-400 space-y-1 text-xs text-slate-900">
+              <div className="flex justify-between items-center">
+                <span>{totalKinds} Jenis</span>
+                <div className="flex justify-between w-44">
+                  <span>Total :</span>
+                  <span className="font-bold">{Math.round(grandTotal).toLocaleString('en-US')}</span>
                 </div>
               </div>
 
               {discountAmount > 0 && (
-                <div className="flex justify-between text-rose-600">
-                  <span></span>
-                  <div className="flex gap-4">
-                    <span>Diskon:</span>
-                    <span className="font-bold">
-                      - {discountAmount.toLocaleString('id-ID')}
-                    </span>
+                <div className="flex justify-end">
+                  <div className="flex justify-between w-44 text-rose-600">
+                    <span>Diskon :</span>
+                    <span className="font-bold">- {Math.round(discountAmount).toLocaleString('en-US')}</span>
                   </div>
                 </div>
               )}
 
-              <div className="flex justify-between pt-1 border-t border-slate-200">
-                <span>Total :</span>
-                <span className="font-bold text-slate-900 text-sm">
-                  {grandTotal.toLocaleString('id-ID')}
-                </span>
-              </div>
-
-              <div className="flex justify-between">
-                <span></span>
-                <div className="flex gap-4 text-slate-600">
+              <div className="flex justify-end">
+                <div className="flex justify-between w-44">
                   <span>Jumlah Bayar :</span>
-                  <span className="font-bold text-slate-900">
-                    {cashPaid.toLocaleString('id-ID')}
-                  </span>
+                  <span className="font-bold">{Math.round(cashPaid).toLocaleString('en-US')}</span>
                 </div>
               </div>
 
-              <div className="flex justify-between">
-                <span></span>
-                <div className="flex gap-4 text-slate-600">
+              <div className="flex justify-end">
+                <div className="flex justify-between w-44">
                   <span>Kembali :</span>
-                  <span className="font-bold text-slate-900">
-                    {change.toLocaleString('id-ID')}
-                  </span>
+                  <span className="font-bold">{Math.round(change).toLocaleString('en-US')}</span>
                 </div>
               </div>
             </div>
 
             {/* Footer Nota */}
-            <div className="pt-4 text-center text-[10px] text-slate-600 space-y-1 font-sans">
-              <p className="font-semibold uppercase tracking-wider text-slate-800">
+            <div className="pt-3 text-center text-xs text-slate-800 space-y-2 font-mono">
+              <p className="font-semibold uppercase leading-tight">
                 BARANG YANG SUDAH DIBELI
                 <br />
-                TIDAK DAPAT DIKEMBALIKAN / DITUKARKAN
+                TIDAK DAPAT DIKEMBALIKAN /
+                <br />
+                DITUKARKAN
               </p>
-              <p className="pt-2 text-slate-500 font-mono">
+              <p className="pt-1 font-semibold uppercase">
                 TERIMA KASIH ATAS KUNJUNGAN ANDA
               </p>
-              <p className="text-[9px] text-emerald-600 font-mono">
+              <p className="text-[11px]">
                 linktr.ee/harmonykitchenware
               </p>
             </div>
