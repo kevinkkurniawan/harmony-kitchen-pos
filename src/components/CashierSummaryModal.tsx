@@ -62,68 +62,72 @@ export default function CashierSummaryModal({
         {/* Content Body */}
         <div className="p-6 space-y-6 overflow-y-auto max-h-[75vh]">
           {/* Printable Thermal Receipt Box */}
-          <div className="bg-white text-slate-900 p-6 rounded-xl border border-slate-300 max-w-[340px] mx-auto receipt-paper font-mono text-xs leading-tight shadow-md">
-            {/* Struk Rekap Header */}
-            <div className="text-left pb-2 border-b border-slate-400 font-bold space-y-1">
-              <div className="flex justify-between uppercase">
+          <div className="bg-white text-blue-900 p-5 rounded-none border-2 border-blue-600 max-w-[320px] mx-auto receipt-paper font-mono text-xs leading-relaxed shadow-sm select-none space-y-2">
+            {/* Top Header */}
+            <div className="pb-2 border-b border-dashed border-blue-400">
+              <div className="flex justify-between uppercase font-bold text-blue-900">
                 <span>{currentUser?.name || summary.cashierName || 'KASIR'}</span>
                 <span>Tgl: {dateStr}</span>
               </div>
-              <div className="flex justify-between text-sm pt-1 border-t border-slate-300">
+              <div className="flex justify-between font-extrabold uppercase text-blue-900 text-sm mt-1">
                 <span>TOTAL OMSET</span>
                 <span>{formatMoney(summary.netSales)}</span>
               </div>
             </div>
 
             {/* Section: DEBIT */}
-            <div className="py-2 border-b border-slate-400 space-y-1">
-              <span className="font-bold uppercase text-[11px] block">DEBIT</span>
-              <div className="flex justify-between pl-2">
-                <span>EDC</span>
+            <div className="pb-2 border-b border-dashed border-blue-400 space-y-1">
+              <div className="font-bold uppercase text-blue-900">DEBIT</div>
+              <div className="flex justify-between pl-2 text-blue-900">
+                <span>EDC BCA</span>
                 <span className="font-bold">{summary.paymentBreakdown.edc > 0 ? formatMoney(summary.paymentBreakdown.edc) : ''}</span>
               </div>
-              <div className="flex justify-between pl-2">
+              <div className="flex justify-between pl-2 text-blue-900">
+                <span>EDC Mandiri</span>
+                <span className="font-bold"></span>
+              </div>
+              <div className="flex justify-between pl-2 text-blue-900">
                 <span>TF</span>
                 <span className="font-bold">{summary.paymentBreakdown.transfer > 0 ? formatMoney(summary.paymentBreakdown.transfer) : ''}</span>
               </div>
             </div>
 
-            {/* Section: KREDIT / Marketplace */}
-            <div className="py-2 border-b border-slate-400 space-y-1">
-              <span className="font-bold uppercase text-[11px] block">KREDIT</span>
-              <div className="flex justify-between pl-2">
+            {/* Section: KREDIT */}
+            <div className="pb-2 border-b border-dashed border-blue-400 space-y-1">
+              <div className="font-bold uppercase text-blue-900">KREDIT</div>
+              <div className="flex justify-between pl-2 text-blue-900">
                 <span>SHOPEE</span>
                 <span className="font-bold">{summary.paymentBreakdown.shopee > 0 ? formatMoney(summary.paymentBreakdown.shopee) : ''}</span>
               </div>
-              <div className="flex justify-between pl-2">
+              <div className="flex justify-between pl-2 text-blue-900">
                 <span>TOKPED</span>
                 <span className="font-bold">{summary.paymentBreakdown.tokopedia > 0 ? formatMoney(summary.paymentBreakdown.tokopedia) : ''}</span>
               </div>
             </div>
 
             {/* Section: QRIS */}
-            <div className="py-2 border-b border-slate-400">
-              <div className="flex justify-between font-bold uppercase">
+            <div className="pb-2 border-b border-dashed border-blue-400">
+              <div className="flex justify-between font-bold uppercase text-blue-900">
                 <span>QRIS</span>
                 <span>{summary.paymentBreakdown.qris > 0 ? formatMoney(summary.paymentBreakdown.qris) : ''}</span>
               </div>
             </div>
 
             {/* Section: CASH & PENGELUARAN */}
-            <div className="py-2 border-b border-slate-400 space-y-1">
-              <div className="flex justify-between font-bold uppercase">
+            <div className="pb-2 border-b border-dashed border-blue-400 space-y-1">
+              <div className="flex justify-between font-bold uppercase text-blue-900">
                 <span>CASH</span>
                 <span>{summary.paymentBreakdown.cash > 0 ? formatMoney(summary.paymentBreakdown.cash) : ''}</span>
               </div>
-              <div className="flex justify-between font-bold uppercase text-slate-700">
+              <div className="flex justify-between font-bold uppercase text-blue-900">
                 <span>PENGELUARAN</span>
                 <span>{summary.expenses > 0 ? formatMoney(summary.expenses) : ''}</span>
               </div>
             </div>
 
             {/* Section: SETOR */}
-            <div className="pt-2">
-              <div className="flex justify-between font-extrabold text-sm uppercase">
+            <div className="pt-1">
+              <div className="flex justify-between font-extrabold text-sm uppercase text-blue-900">
                 <span>SETOR</span>
                 <span>{formatMoney(summary.cashToDeposit)}</span>
               </div>

@@ -27,27 +27,37 @@ export default function LoginModal({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    const foundUser = MOCK_POS_USERS.find(
-      (u) => u.username.toLowerCase() === username.trim().toLowerCase()
-    );
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const json = await res.json();
 
-    if (!foundUser) {
-      setError('Username kasir tidak ditemukan');
-      return;
+      if (!json.success || !json.data) {
+        setError(json.error || 'Username kasir tidak ditemukan di database.');
+        return;
+      }
+
+      const dbUser: POSUser = {
+        id: json.data.id,
+        username: json.data.username,
+        name: json.data.name,
+        role: json.data.role,
+      };
+
+      if (onSelectUser) onSelectUser(dbUser);
+      if (onLoginSuccess) onLoginSuccess(dbUser);
+      if (onClose) onClose();
+    } catch (err) {
+      console.error('Login database error:', err);
+      setError('Gagal menghubungkan ke database kasir.');
     }
-
-    if (foundUser.password && foundUser.password !== password.trim()) {
-      setError('Password kasir salah!');
-      return;
-    }
-
-    if (onSelectUser) onSelectUser(foundUser);
-    if (onLoginSuccess) onLoginSuccess(foundUser);
-    if (onClose) onClose();
   };
 
   return (

@@ -1,0 +1,35 @@
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+
+export async function GET() {
+  try {
+    const users = await prisma.user.findMany({
+      orderBy: { name: 'asc' },
+    });
+
+    return NextResponse.json({ success: true, data: users });
+  } catch (err: any) {
+    console.error('Failed to fetch users from PostgreSQL:', err);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { username, password } = body;
+
+    const user = await prisma.user.findUnique({
+      where: { username: String(username).toLowerCase().trim() },
+    });
+
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Username kasir tidak ditemukan di database.' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, data: user });
+  } catch (err: any) {
+    console.error('Failed to validate user login:', err);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}

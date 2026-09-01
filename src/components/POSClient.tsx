@@ -234,7 +234,7 @@ export default function POSClient() {
         if (cart.length > 0) handleCheckout();
       } else if (e.key === 'F10') {
         e.preventDefault();
-        setIsSummaryModalOpen(true);
+        handleOpenSummaryModal();
       } else if (e.key === 'Escape') {
         setIsMemberModalOpen(false);
         setIsSummaryModalOpen(false);
@@ -439,32 +439,49 @@ export default function POSClient() {
     setIsLoginOpen(true);
   };
 
-  const isDark = theme === 'dark';
-
-  const mockShiftSummary: ShiftSummary = {
+  const [shiftSummary, setShiftSummary] = useState<ShiftSummary>({
     cashierName: currentUser?.name || 'Kasir',
     startTime: '08:00',
     endTime: '20:30',
-    totalTransactions: 24,
-    grossSales: 2835000,
+    totalTransactions: 0,
+    grossSales: 0,
     totalDiscount: 0,
-    netSales: 2835000,
-    taxCollected: taxAmount,
-    serviceCollected: serviceAmount,
+    netSales: 0,
+    taxCollected: 0,
+    serviceCollected: 0,
     paymentBreakdown: {
-      cash: 1620000,
+      cash: 0,
       edc: 0,
       transfer: 0,
-      qris: 146000,
-      shopee: 1069000,
+      qris: 0,
+      shopee: 0,
       tokopedia: 0,
     },
     expenses: 0,
-    cashToDeposit: 1620000,
-    cashInDrawer: 1620000,
-    voidCount: cart.filter((i) => i.isVoided).length,
-    voidTotalAmount: cart.filter((i) => i.isVoided).reduce((sum, i) => sum + i.selectedPrice * i.quantity, 0),
+    cashToDeposit: 0,
+    cashInDrawer: 0,
+    voidCount: 0,
+    voidTotalAmount: 0,
+  });
+
+  const fetchShiftSummary = async () => {
+    try {
+      const res = await fetch(`/api/reports/shift-summary?cashierName=${encodeURIComponent(currentUser?.name || 'Kasir')}`);
+      const json = await res.json();
+      if (json.success && json.data) {
+        setShiftSummary(json.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch shift summary from PostgreSQL:', err);
+    }
   };
+
+  const handleOpenSummaryModal = () => {
+    fetchShiftSummary();
+    setIsSummaryModalOpen(true);
+  };
+
+  const isDark = theme === 'dark';
 
   return (
     <div
@@ -534,7 +551,7 @@ export default function POSClient() {
 
           {/* Daily Shift Summary Report Button (F10) */}
           <button
-            onClick={() => setIsSummaryModalOpen(true)}
+            onClick={handleOpenSummaryModal}
             className={`cursor-pointer px-3 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all active:scale-95 ${
               isDark
                 ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
@@ -1010,7 +1027,7 @@ export default function POSClient() {
         isOpen={isSummaryModalOpen}
         isDark={isDark}
         currentUser={currentUser}
-        summary={mockShiftSummary}
+        summary={shiftSummary}
         onClose={() => setIsSummaryModalOpen(false)}
       />
 

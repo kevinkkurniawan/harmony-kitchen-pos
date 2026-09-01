@@ -4,7 +4,7 @@ export interface POSUser {
   name: string;
   role: 'Cashier' | 'Supervisor' | 'Manager';
   password?: string;
-  shift: 'pagi' | 'siang' | 'malam';
+  shift?: 'pagi' | 'siang' | 'malam';
 }
 
 export const MOCK_POS_USERS: POSUser[] = [

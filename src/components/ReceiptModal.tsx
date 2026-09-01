@@ -72,40 +72,40 @@ export default function ReceiptModal({
 
         {/* Modal Body / Thermal Receipt View */}
         <div className="p-6 overflow-y-auto font-mono text-sm leading-tight select-none bg-slate-50 flex-1 border-b border-slate-200">
-          <div className="bg-white p-6 shadow-xs rounded-xl border border-slate-200 max-w-[320px] mx-auto receipt-paper">
+          <div className="bg-white p-6 shadow-xs rounded-xl border border-blue-400 max-w-[320px] mx-auto receipt-paper text-blue-900">
             {/* Header Nota */}
-            <div className="text-center pb-2 border-b border-dashed border-slate-400">
-              <h2 className="font-bold text-base tracking-wide uppercase text-slate-900">
+            <div className="text-center pb-2 border-b border-dashed border-blue-400">
+              <h2 className="font-bold text-base tracking-wide uppercase text-blue-900">
                 HARMONY KITCHENWARE
               </h2>
-              <p className="text-xs text-slate-700 mt-1">Jalan Panglima Sudirman 65</p>
-              <p className="text-xs text-slate-700">WA : 0851 7238 4707</p>
+              <p className="text-xs text-blue-900 mt-1">Jalan Panglima Sudirman 65</p>
+              <p className="text-xs text-blue-900">WA : 0851 7238 4707</p>
             </div>
 
             {/* Sub Header Nota */}
-            <div className="py-2 border-b border-dashed border-slate-400 text-xs flex justify-between text-slate-800">
+            <div className="py-2 border-b border-dashed border-blue-400 text-xs flex justify-between text-blue-900">
               <span>{dateStr}</span>
               <span>{timeStr}</span>
               <span>Ksr : {cashierName}</span>
             </div>
 
             {/* Items Header */}
-            <div className="py-1 border-b border-dashed border-slate-400 text-xs font-bold flex text-slate-800">
+            <div className="py-1 border-b border-dashed border-blue-400 text-xs font-bold flex text-blue-900">
               <span className="w-6 text-left shrink-0">#</span>
               <span className="flex-1 text-left">Barang</span>
               <span className="text-right shrink-0">Sub Total</span>
             </div>
 
             {/* Items List */}
-            <div className="py-2 border-b border-dashed border-slate-400 space-y-2 text-xs">
+            <div className="py-2 border-b border-dashed border-blue-400 space-y-2 text-xs text-blue-900">
               {validCart.length === 0 ? (
-                <div className="text-center py-4 text-slate-400 italic font-sans">
+                <div className="text-center py-4 text-blue-400 italic font-sans">
                   (Belum ada item)
                 </div>
               ) : (
                 validCart.map((item, idx) => (
                   <div key={idx} className="flex flex-col">
-                    <div className="flex items-start font-medium text-slate-900">
+                    <div className="flex items-start font-medium text-blue-900">
                       <span className="w-6 text-left shrink-0">{item.quantity}</span>
                       <span className="flex-1 pr-2 break-words text-left">
                         {item.product.name}
@@ -115,12 +115,12 @@ export default function ReceiptModal({
                       </span>
                     </div>
                     {item.quantity > 1 && (
-                      <div className="pl-6 text-slate-600 text-[11px]">
+                      <div className="pl-6 text-blue-800 text-[11px]">
                         @ {Math.round(item.selectedPrice).toLocaleString('en-US')}
                       </div>
                     )}
                     {item.memo && (
-                      <div className="pl-6 text-[11px] text-slate-600 font-sans italic">
+                      <div className="pl-6 text-[11px] text-blue-800 font-sans italic">
                         * Catatan: {item.memo}
                       </div>
                     )}
@@ -130,7 +130,7 @@ export default function ReceiptModal({
             </div>
 
             {/* Summary Details */}
-            <div className="py-2 border-b border-dashed border-slate-400 space-y-1 text-xs text-slate-900">
+            <div className="py-2 border-b border-dashed border-blue-400 space-y-1 text-xs text-blue-900">
               <div className="flex justify-between items-center">
                 <span>{totalKinds} Jenis</span>
                 <div className="flex justify-between w-44">
@@ -164,7 +164,7 @@ export default function ReceiptModal({
             </div>
 
             {/* Footer Nota */}
-            <div className="pt-3 text-center text-xs text-slate-800 space-y-2 font-mono">
+            <div className="pt-3 text-center text-xs text-blue-900 space-y-2 font-mono">
               <p className="font-semibold uppercase leading-tight">
                 BARANG YANG SUDAH DIBELI
                 <br />
@@ -175,7 +175,7 @@ export default function ReceiptModal({
               <p className="pt-1 font-semibold uppercase">
                 TERIMA KASIH ATAS KUNJUNGAN ANDA
               </p>
-              <p className="text-[11px]">
+              <p className="text-[11px] text-blue-900">
                 linktr.ee/harmonykitchenware
               </p>
             </div>
