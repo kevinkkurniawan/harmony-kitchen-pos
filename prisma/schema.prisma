@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  name      String
+  role      String   @default("Cashier") // Cashier, Supervisor, Manager
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id            String   @id @default(uuid())
+  barcode       String   @unique
+  name          String
+  category      String
+  uom           String   @default("Pcs")
+  priceRetail   Int
+  stock         Int      @default(0)
+  priceGrosir1  Int
+  priceGrosir2  Int
+  priceGrosir3  Int
+  printerTarget String?  // Cashier, LX300, Pantry
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  transactionItems TransactionItem[]
+}
+
+model Customer {
+  id              String        @id @default(uuid())
+  customerNo      String        @unique
+  name            String
+  phone           String
+  customerType    String        @default("Regular") // Regular, Vip, Wholesale
+  discountPercent Int           @default(0)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  transactions    Transaction[]
+}
+
+model Transaction {
+  id             String            @id @default(uuid())
+  invoiceNo      String            @unique
+  date           DateTime          @default(now())
+  cashierName    String
+  mode           String            @default("Retail") // Retail, Grosir
+  customerId     String?
+  customer       Customer?         @relation(fields: [customerId], references: [id])
+  subtotal       Int
+  discountAmount Int               @default(0)
+  voucherCode    String?
+  taxAmount      Int               @default(0)
+  serviceCharge  Int               @default(0)
+  total          Int
+  paymentMethod  String            @default("Tunai") // Tunai, Debit, Kredit, QRIS, Bon
+  cashPaid       Int
+  change         Int
+  isGrosirMode   Boolean           @default(false)
+  notes          String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  items          TransactionItem[]
+}
+
+model TransactionItem {
+  id            String      @id @default(uuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product     @relation(fields: [productId], references: [id])
+  quantity      Int
+  selectedPrice Int
+  priceType     String      @default("retail") // retail, grosir1, grosir2, grosir3
+  memo          String?
+  isVoided      Boolean     @default(false)
+  voidReason    String?
+  createdAt     DateTime    @default(now())
+}
