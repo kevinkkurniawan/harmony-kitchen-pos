@@ -20,6 +20,9 @@ interface SettingsModalProps {
     printerPantry: string;
   };
   onSaveSettings: (newSettings: SettingsModalProps['settings']) => void;
+  isConnected?: boolean;
+  onConnectPrinter?: () => void;
+  onDisconnectPrinter?: () => void;
 }
 
 export default function SettingsModal({
@@ -28,6 +31,9 @@ export default function SettingsModal({
   onClose,
   settings,
   onSaveSettings,
+  isConnected = false,
+  onConnectPrinter,
+  onDisconnectPrinter,
 }: SettingsModalProps) {
   const [formData, setFormData] = useState(settings);
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -162,9 +168,26 @@ export default function SettingsModal({
 
           {/* Section 3: Hardware Printer Routing */}
           <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
-              <Printer className="w-3.5 h-3.5 text-sky-400" /> Routing Printer Kasir & Nota
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <Printer className="w-3.5 h-3.5 text-sky-400" /> Routing Printer Kasir & Nota
+              </h3>
+              
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${isConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                  {isConnected ? 'Serial Connected' : 'Serial Disconnected'}
+                </span>
+                {isConnected ? (
+                  <button type="button" onClick={onDisconnectPrinter} className="text-[10px] bg-rose-500 hover:bg-rose-600 text-white px-2 py-1 rounded shadow cursor-pointer transition-colors">
+                    Putuskan
+                  </button>
+                ) : (
+                  <button type="button" onClick={onConnectPrinter} className="text-[10px] bg-sky-500 hover:bg-sky-600 text-slate-900 font-bold px-2 py-1 rounded shadow cursor-pointer transition-colors">
+                    Hubungkan WebSerial
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-[11px] font-medium text-slate-400 block mb-1">Printer Kasir Utama (Thermal)</label>

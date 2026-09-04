@@ -1,0 +1,21 @@
+{
+  "name": "Harmony Kitchen POS",
+  "short_name": "HK POS",
+  "description": "Point of Sale for Harmony Kitchen",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070b14",
+  "theme_color": "#f59e0b",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

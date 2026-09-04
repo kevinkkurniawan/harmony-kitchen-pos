@@ -41,6 +41,8 @@ import VoidReasonModal from '@/components/VoidReasonModal';
 import MemberValidationModal from '@/components/MemberValidationModal';
 import CashierSummaryModal from '@/components/CashierSummaryModal';
 import SettingsModal from '@/components/SettingsModal';
+import { usePOSHardware } from '@/lib/usePOSHardware';
+import { useKeyboardShortcuts } from '@/lib/useKeyboardShortcuts';
 
 function HighlightText({ text, query, isDark }: { text: string; query: string; isDark: boolean }) {
   if (!query.trim()) return <span>{text}</span>;
@@ -109,6 +111,8 @@ export default function POSClient() {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  const { isConnected, connectPrinter, disconnectPrinter, printText, playBeep } = usePOSHardware();
+
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
@@ -142,27 +146,29 @@ export default function POSClient() {
   // Restore persistent state from localStorage on mount (prevents data loss on browser refresh)
   useEffect(() => {
     try {
-      const savedUser = localStorage.getItem('hk_pos_user');
-      if (savedUser) {
-        const user = JSON.parse(savedUser);
-        setCurrentUser(user);
-        setIsLoginOpen(false);
-      }
+      setTimeout(() => {
+        const savedUser = localStorage.getItem('hk_pos_user');
+        if (savedUser) {
+          const user = JSON.parse(savedUser);
+          setCurrentUser(user);
+          setIsLoginOpen(false);
+        }
 
-      const savedCart = localStorage.getItem('hk_pos_cart');
-      if (savedCart) {
-        setCart(JSON.parse(savedCart));
-      }
+        const savedCart = localStorage.getItem('hk_pos_cart');
+        if (savedCart) {
+          setCart(JSON.parse(savedCart));
+        }
 
-      const savedMode = localStorage.getItem('hk_pos_grosir_mode');
-      if (savedMode !== null) {
-        setIsGrosirMode(JSON.parse(savedMode));
-      }
+        const savedMode = localStorage.getItem('hk_pos_grosir_mode');
+        if (savedMode !== null) {
+          setIsGrosirMode(JSON.parse(savedMode));
+        }
 
-      const savedCustomer = localStorage.getItem('hk_pos_customer');
-      if (savedCustomer) {
-        setSelectedCustomer(JSON.parse(savedCustomer));
-      }
+        const savedCustomer = localStorage.getItem('hk_pos_customer');
+        if (savedCustomer) {
+          setSelectedCustomer(JSON.parse(savedCustomer));
+        }
+      }, 0);
     } catch (e) {
       console.error('Failed to restore POS state from localStorage:', e);
     }
@@ -213,39 +219,27 @@ export default function POSClient() {
       if (exactMatch) {
         addToCart(exactMatch);
         setSearchQuery('');
+      } else {
+        playBeep('error');
       }
     }
   };
 
   // Global Keyboard Shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'F2') {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      } else if (e.key === 'F4') {
-        e.preventDefault();
-        handleToggleGrosir();
-      } else if (e.key === 'F8') {
-        e.preventDefault();
-        setIsMemberModalOpen(true);
-      } else if (e.key === 'F9') {
-        e.preventDefault();
-        if (cart.length > 0) handleCheckout();
-      } else if (e.key === 'F10') {
-        e.preventDefault();
-        handleOpenSummaryModal();
-      } else if (e.key === 'Escape') {
-        setIsMemberModalOpen(false);
-        setIsSummaryModalOpen(false);
-        setIsSettingsModalOpen(false);
-        setMemoItem(null);
-        setVoidItem(null);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isGrosirMode, cart]);
+  useKeyboardShortcuts({
+    'F2': (e) => searchInputRef.current?.focus(),
+    'F4': (e) => handleToggleGrosir(),
+    'F8': (e) => setIsMemberModalOpen(true),
+    'F9': (e) => { if (cart.length > 0) handleCheckout(); },
+    'F10': (e) => handleOpenSummaryModal(),
+    'Escape': (e) => {
+      setIsMemberModalOpen(false);
+      setIsSummaryModalOpen(false);
+      setIsSettingsModalOpen(false);
+      setMemoItem(null);
+      setVoidItem(null);
+    }
+  });
 
   const handleToggleGrosir = () => {
     const nextGrosirState = !isGrosirMode;
@@ -279,6 +273,7 @@ export default function POSClient() {
   };
 
   const addToCart = (product: Product) => {
+    playBeep('success');
     setCart((prevCart) => {
       const existingIndex = prevCart.findIndex((i) => i.product.id === product.id && !i.isVoided);
       let selectedPrice = product.priceRetail;
@@ -401,6 +396,7 @@ export default function POSClient() {
   const handleCheckout = async () => {
     if (activeCartItems.length === 0) return;
 
+    // eslint-disable-next-line react-hooks/purity
     const invNo = `INV-${Date.now().toString().slice(-6)}`;
     setLastInvoiceNo(invNo);
 
@@ -1029,6 +1025,8 @@ export default function POSClient() {
         currentUser={currentUser}
         summary={shiftSummary}
         onClose={() => setIsSummaryModalOpen(false)}
+        isConnected={isConnected}
+        onPrintText={printText}
       />
 
       <SettingsModal
@@ -1037,6 +1035,9 @@ export default function POSClient() {
         settings={posSettings}
         onClose={() => setIsSettingsModalOpen(false)}
         onSaveSettings={(newSet) => setPosSettings(newSet)}
+        isConnected={isConnected}
+        onConnectPrinter={connectPrinter}
+        onDisconnectPrinter={disconnectPrinter}
       />
 
       <ReceiptModal
@@ -1045,11 +1046,13 @@ export default function POSClient() {
         cart={cart}
         cashierName={currentUser?.name || 'Kasir'}
         cashPaid={numPaid}
-        invoiceNo={lastInvoiceNo || `INV-${Date.now().toString().slice(-6)}`}
+        invoiceNo={lastInvoiceNo || 'DRAFT'}
         orderType={isGrosirMode ? 'Grosir' : 'Retail'}
         customer={selectedCustomer}
         paymentMethod={paymentMethod}
         discountAmount={totalDiscount}
+        isConnected={isConnected}
+        onPrintText={printText}
       />
     </div>
   );

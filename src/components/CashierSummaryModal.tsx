@@ -11,6 +11,8 @@ interface CashierSummaryModalProps {
   currentUser: POSUser | null;
   summary: ShiftSummary;
   onClose: () => void;
+  isConnected?: boolean;
+  onPrintText?: (text: string) => void;
 }
 
 export default function CashierSummaryModal({
@@ -19,17 +21,60 @@ export default function CashierSummaryModal({
   currentUser,
   summary,
   onClose,
+  isConnected = false,
+  onPrintText,
 }: CashierSummaryModalProps) {
   if (!isOpen) return null;
 
-  const handlePrintReport = () => {
-    window.print();
-  };
-
+  const formatMoney = (val: number) => Math.round(val).toLocaleString('id-ID');
+  
   const currentDate = new Date();
   const dateStr = `${currentDate.getDate().toString().padStart(2, '0')}/${(currentDate.getMonth() + 1).toString().padStart(2, '0')}/${currentDate.getFullYear()}`;
 
-  const formatMoney = (val: number) => Math.round(val).toLocaleString('id-ID');
+  const handlePrintReport = () => {
+    if (isConnected && onPrintText) {
+      const ESC = '\x1B';
+      const GS = '\x1D';
+      const INIT = ESC + '@';
+      const BOLD_ON = ESC + 'E' + '\x01';
+      const BOLD_OFF = ESC + 'E' + '\x00';
+      const CENTER = ESC + 'a' + '\x01';
+      const LEFT = ESC + 'a' + '\x00';
+      const CUT = GS + 'V' + '\x41' + '\x00';
+      
+      const cashierName = currentUser?.name || summary.cashierName || 'KASIR';
+      let str = INIT + CENTER + BOLD_ON + 'X-REPORT (REKAP KASIR)\n' + BOLD_OFF;
+      str += `Kasir: ${cashierName}\nTanggal: ${dateStr}\n`;
+      str += '--------------------------------\n' + LEFT;
+      
+      const formatLine = (label: string, val: string) => {
+        return label + ' '.repeat(Math.max(1, 32 - label.length - val.length)) + val + '\n';
+      };
+      
+      str += BOLD_ON + formatLine('TOTAL OMSET', formatMoney(summary.netSales)) + BOLD_OFF;
+      str += '--------------------------------\n';
+      
+      str += BOLD_ON + 'DEBIT\n' + BOLD_OFF;
+      if (summary.paymentBreakdown.edc > 0) str += formatLine(' EDC BCA', formatMoney(summary.paymentBreakdown.edc));
+      if (summary.paymentBreakdown.transfer > 0) str += formatLine(' TRANSFER', formatMoney(summary.paymentBreakdown.transfer));
+      
+      str += BOLD_ON + 'KREDIT\n' + BOLD_OFF;
+      if (summary.paymentBreakdown.shopee > 0) str += formatLine(' SHOPEE', formatMoney(summary.paymentBreakdown.shopee));
+      if (summary.paymentBreakdown.tokopedia > 0) str += formatLine(' TOKOPEDIA', formatMoney(summary.paymentBreakdown.tokopedia));
+      
+      if (summary.paymentBreakdown.qris > 0) str += BOLD_ON + formatLine('QRIS', formatMoney(summary.paymentBreakdown.qris)) + BOLD_OFF;
+      if (summary.paymentBreakdown.cash > 0) str += BOLD_ON + formatLine('CASH', formatMoney(summary.paymentBreakdown.cash)) + BOLD_OFF;
+      if (summary.expenses > 0) str += BOLD_ON + formatLine('PENGELUARAN', formatMoney(summary.expenses)) + BOLD_OFF;
+      
+      str += '--------------------------------\n';
+      str += BOLD_ON + formatLine('SETOR', formatMoney(summary.cashToDeposit)) + BOLD_OFF;
+      
+      str += '\n\n' + CUT;
+      onPrintText(str);
+    } else {
+      window.print();
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-xs p-4 animate-in fade-in duration-200">

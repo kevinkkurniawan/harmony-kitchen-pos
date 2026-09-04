@@ -16,6 +16,8 @@ interface ReceiptModalProps {
   paymentMethod?: string;
   discountAmount?: number;
   notes?: string;
+  isConnected?: boolean;
+  onPrintText?: (text: string) => void;
 }
 
 export default function ReceiptModal({
@@ -28,6 +30,8 @@ export default function ReceiptModal({
   customer,
   paymentMethod = 'Tunai',
   discountAmount = 0,
+  isConnected = false,
+  onPrintText,
 }: ReceiptModalProps) {
   if (!isOpen) return null;
 
@@ -50,7 +54,64 @@ export default function ReceiptModal({
   });
 
   const handlePrint = () => {
-    window.print();
+    if (isConnected && onPrintText) {
+      // Build ESC/POS string
+      const ESC = '\x1B';
+      const GS = '\x1D';
+      const INIT = ESC + '@';
+      const BOLD_ON = ESC + 'E' + '\x01';
+      const BOLD_OFF = ESC + 'E' + '\x00';
+      const CENTER = ESC + 'a' + '\x01';
+      const LEFT = ESC + 'a' + '\x00';
+      const RIGHT = ESC + 'a' + '\x02';
+      const CUT = GS + 'V' + '\x41' + '\x00';
+      const KICK_DRAWER = ESC + 'p' + '\x00' + '\x32' + '\x32';
+      
+      let str = INIT + CENTER + BOLD_ON + 'HARMONY KITCHENWARE\n' + BOLD_OFF;
+      str += 'Jalan Panglima Sudirman 65\nWA : 0851 7238 4707\n';
+      str += '--------------------------------\n' + LEFT;
+      str += `${dateStr} ${timeStr}\nKsr: ${cashierName}\n`;
+      str += '--------------------------------\n';
+      
+      validCart.forEach(item => {
+        const lineTotal = Math.round(item.selectedPrice * item.quantity).toLocaleString('en-US');
+        str += `${item.product.name}\n`;
+        str += `${item.quantity} x ${Math.round(item.selectedPrice).toLocaleString('en-US')}`;
+        // Add spaces to right align total
+        const leftPart = `${item.quantity} x ${Math.round(item.selectedPrice).toLocaleString('en-US')}`;
+        const spaces = Math.max(1, 32 - leftPart.length - lineTotal.length);
+        str += ' '.repeat(spaces) + lineTotal + '\n';
+        if (item.memo) {
+          str += ` * ${item.memo}\n`;
+        }
+      });
+      
+      str += '--------------------------------\n';
+      str += `Total Jenis : ${totalKinds}\n`;
+      
+      const totalStr = Math.round(grandTotal).toLocaleString('en-US');
+      str += 'Total       : ' + ' '.repeat(Math.max(1, 18 - totalStr.length)) + totalStr + '\n';
+      
+      if (discountAmount > 0) {
+        const discStr = Math.round(discountAmount).toLocaleString('en-US');
+        str += 'Diskon      :-' + ' '.repeat(Math.max(1, 18 - discStr.length)) + discStr + '\n';
+      }
+      
+      const bayarStr = Math.round(cashPaid).toLocaleString('en-US');
+      str += 'Jumlah Bayar: ' + ' '.repeat(Math.max(1, 18 - bayarStr.length)) + bayarStr + '\n';
+      
+      const kembaliStr = Math.round(change).toLocaleString('en-US');
+      str += 'Kembali     : ' + ' '.repeat(Math.max(1, 18 - kembaliStr.length)) + kembaliStr + '\n';
+      
+      str += '\n' + CENTER;
+      str += 'BARANG YANG SUDAH DIBELI\nTIDAK DAPAT DIKEMBALIKAN /\nDITUKARKAN\n\n';
+      str += 'TERIMA KASIH ATAS KUNJUNGAN ANDA\nlinktr.ee/harmonykitchenware\n';
+      str += '\n\n' + CUT + KICK_DRAWER;
+      
+      onPrintText(str);
+    } else {
+      window.print();
+    }
   };
 
   return (
