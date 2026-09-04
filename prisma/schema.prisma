@@ -11,6 +11,7 @@ model User {
   id        String   @id @default(uuid())
   username  String   @unique
   name      String
+  password  String   @default("123")
   role      String   @default("Cashier") // Cashier, Supervisor, Manager
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

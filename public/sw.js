@@ -1,9 +1,8 @@
-const CACHE_NAME = 'hk-pos-cache-v1';
+const CACHE_NAME = 'hk-pos-cache-v2';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // Cache base shell
       return cache.addAll(['/']);
     })
   );
@@ -26,13 +25,21 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   
-  // Ignore non-GET requests (POST, PUT, DELETE)
-  if (request.method !== 'GET') {
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+  // Bypass Next.js internal and HMR requests
+  if (
+    url.pathname.startsWith('/_next/') ||
+    url.pathname.includes('/__nextjs') ||
+    url.protocol === 'chrome-extension:'
+  ) {
     return;
   }
 
-  // Handle API Requests using Network-First, fallback to Cache
-  if (request.url.includes('/api/')) {
+  // Use Network-First strategy for HTML Navigation and API requests
+  // This prevents Next.js infinite reload loops caused by stale cached HTML
+  if (request.mode === 'navigate' || url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(request)
         .then((response) => {
@@ -49,7 +56,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Handle static assets & pages using Cache-First, fallback to Network
+  // Cache-First strategy for other static assets (images, fonts, etc)
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       if (cachedResponse) {

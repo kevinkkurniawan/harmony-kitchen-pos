@@ -143,64 +143,70 @@ export default function POSClient() {
     return () => clearTimeout(timer);
   }, [searchQuery, fetchProducts]);
 
-  // Restore persistent state from localStorage on mount (prevents data loss on browser refresh)
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Restore persistent state from localStorage on mount
   useEffect(() => {
     try {
-      setTimeout(() => {
-        const savedUser = localStorage.getItem('hk_pos_user');
-        if (savedUser) {
-          const user = JSON.parse(savedUser);
-          setCurrentUser(user);
-          setIsLoginOpen(false);
-        }
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      const savedUser = localStorage.getItem('hk_pos_user');
+      if (savedUser) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setCurrentUser(JSON.parse(savedUser));
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setIsLoginOpen(false);
+      }
 
-        const savedCart = localStorage.getItem('hk_pos_cart');
-        if (savedCart) {
-          setCart(JSON.parse(savedCart));
-        }
+      const savedCart = localStorage.getItem('hk_pos_cart');
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (savedCart) setCart(JSON.parse(savedCart));
 
-        const savedMode = localStorage.getItem('hk_pos_grosir_mode');
-        if (savedMode !== null) {
-          setIsGrosirMode(JSON.parse(savedMode));
-        }
+      const savedMode = localStorage.getItem('hk_pos_grosir_mode');
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (savedMode !== null) setIsGrosirMode(JSON.parse(savedMode));
 
-        const savedCustomer = localStorage.getItem('hk_pos_customer');
-        if (savedCustomer) {
-          setSelectedCustomer(JSON.parse(savedCustomer));
-        }
-      }, 0);
+      const savedCustomer = localStorage.getItem('hk_pos_customer');
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (savedCustomer) setSelectedCustomer(JSON.parse(savedCustomer));
     } catch (e) {
       console.error('Failed to restore POS state from localStorage:', e);
+    } finally {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsInitialized(true);
     }
   }, []);
 
   // Sync currentUser to localStorage
   useEffect(() => {
+    if (!isInitialized) return;
     if (currentUser) {
       localStorage.setItem('hk_pos_user', JSON.stringify(currentUser));
     } else {
       localStorage.removeItem('hk_pos_user');
     }
-  }, [currentUser]);
+  }, [currentUser, isInitialized]);
 
   // Sync cart to localStorage
   useEffect(() => {
+    if (!isInitialized) return;
     localStorage.setItem('hk_pos_cart', JSON.stringify(cart));
-  }, [cart]);
+  }, [cart, isInitialized]);
 
   // Sync Grosir Mode to localStorage
   useEffect(() => {
+    if (!isInitialized) return;
     localStorage.setItem('hk_pos_grosir_mode', JSON.stringify(isGrosirMode));
-  }, [isGrosirMode]);
+  }, [isGrosirMode, isInitialized]);
 
   // Sync selectedCustomer to localStorage
   useEffect(() => {
+    if (!isInitialized) return;
     if (selectedCustomer) {
       localStorage.setItem('hk_pos_customer', JSON.stringify(selectedCustomer));
     } else {
       localStorage.removeItem('hk_pos_customer');
     }
-  }, [selectedCustomer]);
+  }, [selectedCustomer, isInitialized]);
 
   // Auto focus search input on mount for barcode scanner readiness
   useEffect(() => {

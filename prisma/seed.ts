@@ -7,16 +7,16 @@ async function main() {
 
   // 1. Seed Users
   const users = [
-    { username: 'lia', name: 'Lia Kasir Utama', role: 'Cashier' },
-    { username: 'linda', name: 'Linda Kasir Shift 2', role: 'Cashier' },
-    { username: 'sulis', name: 'Sulis Supervisor Toko', role: 'Supervisor' },
-    { username: 'budi', name: 'Budi Manager Operasional', role: 'Manager' },
+    { username: 'lia', name: 'Lia Kasir Utama', role: 'Cashier', password: '123' },
+    { username: 'linda', name: 'Linda Kasir Shift 2', role: 'Cashier', password: '123' },
+    { username: 'sulis', name: 'Sulis Supervisor Toko', role: 'Supervisor', password: '1234' },
+    { username: 'budi', name: 'Budi Manager Operasional', role: 'Manager', password: 'admin' },
   ];
 
   for (const u of users) {
     await prisma.user.upsert({
       where: { username: u.username },
-      update: { name: u.name, role: u.role },
+      update: { name: u.name, role: u.role, password: u.password },
       create: u,
     });
   }

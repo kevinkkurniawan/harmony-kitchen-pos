@@ -27,6 +27,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Username kasir tidak ditemukan di database.' }, { status: 404 });
     }
 
+    if (user.password !== password) {
+      return NextResponse.json({ success: false, error: 'Password yang dimasukkan salah.' }, { status: 401 });
+    }
+
     return NextResponse.json({ success: true, data: user });
   } catch (err: any) {
     console.error('Failed to validate user login:', err);
