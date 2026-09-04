@@ -278,7 +278,7 @@ export default function POSClient() {
     );
   };
 
-  const addToCart = (product: Product) => {
+  const addToCart = useCallback((product: Product) => {
     playBeep('success');
     setCart((prevCart) => {
       const existingIndex = prevCart.findIndex((i) => i.product.id === product.id && !i.isVoided);
@@ -325,7 +325,7 @@ export default function POSClient() {
         ];
       }
     });
-  };
+  }, [isGrosirMode, playBeep]);
 
   const updateQty = (index: number, delta: number) => {
     setCart((prevCart) => {
@@ -377,6 +377,48 @@ export default function POSClient() {
       )
     );
   };
+
+  // --- GLOBAL BARCODE SCANNER ---
+  const barcodeBuffer = useRef<string>('');
+  const lastKeyTime = useRef<number>(0);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Abaikan jika user sedang mengetik di dalam input field (misal search box, note, modal)
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      const currentTime = Date.now();
+      
+      if (e.key === 'Enter') {
+        if (barcodeBuffer.current.length > 2) { // Asumsi barcode lebih dari 2 karakter
+          e.preventDefault();
+          const scannedCode = barcodeBuffer.current;
+          barcodeBuffer.current = '';
+          
+          const exactMatch = products.find((p) => p.barcode.toLowerCase() === scannedCode.toLowerCase());
+          
+          if (exactMatch) {
+            addToCart(exactMatch);
+          } else {
+            playBeep('error');
+          }
+        }
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) { 
+        // Scanner mengetik sangat cepat (biasanya < 30ms antar karakter)
+        if (currentTime - lastKeyTime.current > 50) {
+          barcodeBuffer.current = e.key; // Reset jika lebih dari 50ms (berarti ketikan jari manusia)
+        } else {
+          barcodeBuffer.current += e.key; // Tambah karakter ke buffer scanner
+        }
+        lastKeyTime.current = currentTime;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [products, addToCart, playBeep]);
 
   const activeCartItems = cart.filter((item) => !item.isVoided);
   const rawSubtotal = activeCartItems.reduce((sum, item) => sum + item.selectedPrice * item.quantity, 0);
