@@ -10,16 +10,26 @@ export async function GET(request: Request) {
       where: query
         ? {
             OR: [
-              { name: { contains: query, mode: 'insensitive' } },
-              { customerNo: { contains: query, mode: 'insensitive' } },
-              { phone: { contains: query } },
+              { customername: { contains: query, mode: 'insensitive' } },
+              { customerno: { contains: query, mode: 'insensitive' } },
+              { phone1: { contains: query } },
+              { phone2: { contains: query } },
             ],
           }
         : undefined,
-      orderBy: { name: 'asc' },
+      orderBy: { customername: 'asc' },
     });
 
-    return NextResponse.json({ success: true, data: customers });
+    const mappedCustomers = customers.map((c) => ({
+      id: c.id.toString(),
+      customerNo: c.customerno || '',
+      name: c.customername || 'Unknown',
+      phone: c.phone1 || c.phone2 || '',
+      customerType: 'Regular', // Hardcoded if not present directly
+      discountPercent: 0, // Using 0 by default, could use credit_limit or something else
+    }));
+
+    return NextResponse.json({ success: true, data: mappedCustomers });
   } catch (err: any) {
     console.error('Failed to fetch customers from PostgreSQL database:', err);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

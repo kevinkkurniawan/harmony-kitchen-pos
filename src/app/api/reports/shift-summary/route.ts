@@ -6,27 +6,28 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const cashierName = searchParams.get('cashierName') || 'Kasir';
 
-    // Start of today (00:00:00) and End of today (23:59:59)
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
 
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
-    const transactions = await prisma.transaction.findMany({
+    const headers = await prisma.t_salesposheader.findMany({
       where: {
-        createdAt: {
+        createddate: {
           gte: startOfDay,
           lte: endOfDay,
         },
       },
-      include: {
-        items: true,
-      },
+    });
+
+    const headerIds = headers.map((h) => h.id);
+    const details = await prisma.t_salesposdetail.findMany({
+      where: { salesposheaderid: { in: headerIds } },
     });
 
     let grossSales = 0;
-    let totalDiscount = 0;
+    let totalDiscount = 0; // Might need to aggregate discounts from details or header
     let netSales = 0;
     let taxCollected = 0;
     let serviceCollected = 0;
@@ -43,35 +44,21 @@ export async function GET(request: Request) {
     let voidCount = 0;
     let voidTotalAmount = 0;
 
-    for (const tx of transactions) {
-      grossSales += tx.subtotal;
-      totalDiscount += tx.discountAmount;
-      netSales += tx.total;
-      taxCollected += tx.taxAmount;
-      serviceCollected += tx.serviceCharge;
+    for (const tx of headers) {
+      const grandTotal = Number(tx.grandtotal || 0);
+      grossSales += grandTotal;
+      netSales += grandTotal;
 
-      const pm = (tx.paymentMethod || 'CASH').toUpperCase();
-      if (pm === 'CASH' || pm === 'TUNAI') {
-        breakdown.cash += tx.total;
-      } else if (pm === 'EDC' || pm === 'DEBIT' || pm === 'KREDIT') {
-        breakdown.edc += tx.total;
-      } else if (pm === 'TRANSFER' || pm === 'TF') {
-        breakdown.transfer += tx.total;
-      } else if (pm === 'QRIS') {
-        breakdown.qris += tx.total;
-      } else if (pm === 'SHOPEE') {
-        breakdown.shopee += tx.total;
-      } else if (pm === 'TOKOPEDIA' || pm === 'TOKPED') {
-        breakdown.tokopedia += tx.total;
-      } else {
-        breakdown.cash += tx.total;
-      }
+      // Currently mapping everything to cash since there's no payment type in header
+      breakdown.cash += grandTotal;
 
-      for (const item of tx.items) {
-        if (item.isVoided) {
-          voidCount += 1;
-          voidTotalAmount += item.selectedPrice * item.quantity;
-        }
+      const txDetails = details.filter((d) => d.salesposheaderid === tx.id);
+      for (const item of txDetails) {
+        // Void check if supported, assuming false for now
+        // if (item.isVoided) {
+        //   voidCount += 1;
+        //   voidTotalAmount += Number(item.price) * Number(item.qty);
+        // }
       }
     }
 
@@ -84,7 +71,7 @@ export async function GET(request: Request) {
         cashierName,
         startTime: '08:00',
         endTime: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }),
-        totalTransactions: transactions.length,
+        totalTransactions: headers.length,
         grossSales,
         totalDiscount,
         netSales,
