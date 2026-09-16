@@ -10,23 +10,22 @@ export async function GET(request: Request) {
       where: query
         ? {
             OR: [
-              { customername: { contains: query, mode: 'insensitive' } },
-              { customerno: { contains: query, mode: 'insensitive' } },
-              { phone1: { contains: query } },
-              { phone2: { contains: query } },
+              { customerName: { contains: query, mode: 'insensitive' } },
+              { customerCode: { contains: query, mode: 'insensitive' } },
+              { phone: { contains: query } },
             ],
           }
         : undefined,
-      orderBy: { customername: 'asc' },
+      orderBy: { customerName: 'asc' },
     });
 
     const mappedCustomers = customers.map((c) => ({
       id: c.id.toString(),
-      customerNo: c.customerno || '',
-      name: c.customername || 'Unknown',
-      phone: c.phone1 || c.phone2 || '',
-      customerType: 'Regular', // Hardcoded if not present directly
-      discountPercent: 0, // Using 0 by default, could use credit_limit or something else
+      customerNo: c.customerCode || '',
+      name: c.customerName || 'Unknown',
+      phone: c.phone || '',
+      customerType: c.customerType || 'Regular',
+      discountPercent: 0,
     }));
 
     return NextResponse.json({ success: true, data: mappedCustomers });

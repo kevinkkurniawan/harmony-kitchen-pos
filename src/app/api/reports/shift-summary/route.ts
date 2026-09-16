@@ -12,22 +12,18 @@ export async function GET(request: Request) {
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
-    const headers = await prisma.t_salesposheader.findMany({
+    const headers = await prisma.salesPOSHeader.findMany({
       where: {
-        createddate: {
+        createdAt: {
           gte: startOfDay,
           lte: endOfDay,
         },
       },
-    });
-
-    const headerIds = headers.map((h) => h.id);
-    const details = await prisma.t_salesposdetail.findMany({
-      where: { salesposheaderid: { in: headerIds } },
+      include: { details: true },
     });
 
     let grossSales = 0;
-    let totalDiscount = 0; // Might need to aggregate discounts from details or header
+    let totalDiscount = 0;
     let netSales = 0;
     let taxCollected = 0;
     let serviceCollected = 0;
@@ -45,20 +41,36 @@ export async function GET(request: Request) {
     let voidTotalAmount = 0;
 
     for (const tx of headers) {
-      const grandTotal = Number(tx.grandtotal || 0);
-      grossSales += grandTotal;
+      const grandTotal = Number(tx.grandTotal || 0);
+      const discount = Number(tx.discountAmount || 0);
+      const subtotal = Number(tx.totalAmount || (grandTotal + discount));
+
+      grossSales += subtotal;
+      totalDiscount += discount;
       netSales += grandTotal;
+      taxCollected += Number(tx.taxAmount || 0);
+      serviceCollected += Number(tx.serviceCharge || 0);
 
-      // Currently mapping everything to cash since there's no payment type in header
-      breakdown.cash += grandTotal;
+      const method = (tx.paymentMethod || 'CASH').toUpperCase();
+      if (method.includes('CASH') || method.includes('TUNAI')) {
+        breakdown.cash += grandTotal;
+      } else if (method.includes('QRIS')) {
+        breakdown.qris += grandTotal;
+      } else if (method.includes('TRANSFER')) {
+        breakdown.transfer += grandTotal;
+      } else if (method.includes('SHOPEE')) {
+        breakdown.shopee += grandTotal;
+      } else if (method.includes('TOKOPEDIA')) {
+        breakdown.tokopedia += grandTotal;
+      } else {
+        breakdown.edc += grandTotal;
+      }
 
-      const txDetails = details.filter((d) => d.salesposheaderid === tx.id);
-      for (const item of txDetails) {
-        // Void check if supported, assuming false for now
-        // if (item.isVoided) {
-        //   voidCount += 1;
-        //   voidTotalAmount += Number(item.price) * Number(item.qty);
-        // }
+      for (const item of tx.details || []) {
+        if (item.isVoided) {
+          voidCount += 1;
+          voidTotalAmount += Number(item.price) * Number(item.qty);
+        }
       }
     }
 
@@ -90,3 +102,4 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
+

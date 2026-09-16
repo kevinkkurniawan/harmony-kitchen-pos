@@ -2,9 +2,12 @@ export interface POSUser {
   id: string;
   username: string;
   name: string;
-  role: 'Cashier' | 'Supervisor' | 'Manager';
+  role: 'Cashier' | 'Supervisor' | 'Manager' | string;
   password?: string;
   shift?: 'pagi' | 'siang' | 'malam';
+  token?: string;
+  hasHpp?: boolean;
+  canViewAllCashiers?: boolean;
 }
 
 export const MOCK_POS_USERS: POSUser[] = [

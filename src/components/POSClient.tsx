@@ -76,7 +76,11 @@ export default function POSClient() {
   const [products, setProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pendingSelections, setPendingSelections] = useState<number>(0);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
+  const [transactionGen, setTransactionGen] = useState<number>(1);
+  const transactionGenRef = useRef<number>(1);
+  transactionGenRef.current = transactionGen;
 
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isGrosirMode, setIsGrosirMode] = useState(false);
@@ -108,6 +112,39 @@ export default function POSClient() {
   const [cashPaid, setCashPaid] = useState<number | ''>('');
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [lastInvoiceNo, setLastInvoiceNo] = useState('');
+  const [completedTransaction, setCompletedTransaction] = useState<any | null>(null);
+
+  // Cart Width Resizing State (User-Scoped)
+  const DEFAULT_CART_WIDTH = 420;
+  const MIN_CART_WIDTH = 340;
+  const MAX_CART_WIDTH = 680;
+  const [cartWidth, setCartWidth] = useState<number>(DEFAULT_CART_WIDTH);
+
+  useEffect(() => {
+    const userKey = currentUser ? `user_${currentUser.id}` : 'guest';
+    const saved = localStorage.getItem(`hk_pos_cart_width_${userKey}`);
+    if (saved) {
+      const parsed = parseInt(saved, 10);
+      if (!isNaN(parsed) && parsed >= MIN_CART_WIDTH && parsed <= MAX_CART_WIDTH) {
+        setCartWidth(parsed);
+        return;
+      }
+    }
+    setCartWidth(DEFAULT_CART_WIDTH);
+  }, [currentUser]);
+
+  const updateCartWidth = (newWidth: number) => {
+    const clamped = Math.min(MAX_CART_WIDTH, Math.max(MIN_CART_WIDTH, newWidth));
+    setCartWidth(clamped);
+    const userKey = currentUser ? `user_${currentUser.id}` : 'guest';
+    localStorage.setItem(`hk_pos_cart_width_${userKey}`, clamped.toString());
+  };
+
+  const resetCartWidth = () => {
+    setCartWidth(DEFAULT_CART_WIDTH);
+    const userKey = currentUser ? `user_${currentUser.id}` : 'guest';
+    localStorage.removeItem(`hk_pos_cart_width_${userKey}`);
+  };
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -117,10 +154,8 @@ export default function POSClient() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  const fetchProducts = useCallback(async (query = '', showRefreshAnimation = false) => {
-    if (showRefreshAnimation) setIsRefreshing(true);
-    else setIsLoading(true);
-
+  const fetchProducts = useCallback(async (query = '') => {
+    setIsLoading(true);
     try {
       const res = await fetch(`/api/products?q=${encodeURIComponent(query)}&limit=40`);
       const json = await res.json();
@@ -131,7 +166,6 @@ export default function POSClient() {
       console.error('Failed to fetch products:', err);
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
     }
   }, []);
 
@@ -148,30 +182,50 @@ export default function POSClient() {
   // Restore persistent state from localStorage on mount
   useEffect(() => {
     try {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       const savedUser = localStorage.getItem('hk_pos_user');
       if (savedUser) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setCurrentUser(JSON.parse(savedUser));
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIsLoginOpen(false);
       }
 
-      const savedCart = localStorage.getItem('hk_pos_cart');
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (savedCart) setCart(JSON.parse(savedCart));
+      // Restore cart from hk_pos_cart_v2 with fallback to legacy hk_pos_cart
+      const savedCartV2 = localStorage.getItem('hk_pos_cart_v2');
+      if (savedCartV2) {
+        const parsed: any[] = JSON.parse(savedCartV2);
+        const migrated: CartItem[] = parsed.map((item: any, idx: number) => ({
+          ...item,
+          lineId: item.lineId || `line-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 7)}`,
+          isLegacy: item.isLegacy ?? (!item.quoteRef),
+        }));
+        setCart(migrated);
+      } else {
+        const savedCartLegacy = localStorage.getItem('hk_pos_cart');
+        if (savedCartLegacy) {
+          const parsed: any[] = JSON.parse(savedCartLegacy);
+          const migrated: CartItem[] = parsed.map((item: any, idx: number) => ({
+            ...item,
+            lineId: item.lineId || `legacy-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 7)}`,
+            isLegacy: true,
+          }));
+          setCart(migrated);
+        }
+      }
+
+      const savedReceipt = localStorage.getItem('hk_pos_last_receipt');
+      if (savedReceipt) {
+        try {
+          setCompletedTransaction(JSON.parse(savedReceipt));
+        } catch {}
+      }
 
       const savedMode = localStorage.getItem('hk_pos_grosir_mode');
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (savedMode !== null) setIsGrosirMode(JSON.parse(savedMode));
 
       const savedCustomer = localStorage.getItem('hk_pos_customer');
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (savedCustomer) setSelectedCustomer(JSON.parse(savedCustomer));
     } catch (e) {
       console.error('Failed to restore POS state from localStorage:', e);
     } finally {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsInitialized(true);
     }
   }, []);
@@ -186,10 +240,10 @@ export default function POSClient() {
     }
   }, [currentUser, isInitialized]);
 
-  // Sync cart to localStorage
+  // Sync cart to versioned localStorage
   useEffect(() => {
     if (!isInitialized) return;
-    localStorage.setItem('hk_pos_cart', JSON.stringify(cart));
+    localStorage.setItem('hk_pos_cart_v2', JSON.stringify(cart));
   }, [cart, isInitialized]);
 
   // Sync Grosir Mode to localStorage
@@ -213,151 +267,139 @@ export default function POSClient() {
     searchInputRef.current?.focus();
   }, []);
 
+  // Unified fresh database selection pipeline
+  const selectItem = useCallback(
+    async ({ productId, barcode }: { productId?: string | number; barcode?: string }) => {
+      const capturedMode = isGrosirMode ? 'grosir1' : 'retail';
+      const capturedGen = transactionGenRef.current;
+      const token = currentUser?.token;
+
+      setPendingSelections((prev) => prev + 1);
+      setSelectionError(null);
+
+      try {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const res = await fetch('/api/products/quote', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            productId: productId ? Number(productId) : undefined,
+            barcode: barcode ? String(barcode).trim() : undefined,
+            mode: capturedMode,
+          }),
+        });
+
+        const json = await res.json();
+
+        // Drop response if transaction reset or user changed in-flight
+        if (transactionGenRef.current !== capturedGen) {
+          return;
+        }
+
+        if (!res.ok || !json.success) {
+          playBeep('error');
+          setSelectionError(json.error || 'Gagal mengambil harga produk dari database');
+          return;
+        }
+
+        playBeep('success');
+        const q = json.data;
+        const quotedProduct: Product = {
+          id: q.productId.toString(),
+          name: q.name,
+          barcode: q.barcode,
+          category: q.category,
+          uom: q.uom,
+          priceRetail: q.priceType === 'retail' ? q.price : (q.priceRetail || q.price),
+          priceGrosir1: q.priceType === 'grosir1' ? q.price : (q.priceGrosir1 || q.price),
+          priceGrosir2: 0,
+          priceGrosir3: 0,
+          stock: q.stock,
+        };
+
+        setCart((prevCart) => {
+          // Compatibility rule: merge ONLY IF same product ID, exact same unit price, same priceType, not voided, and no memo
+          const matchIdx = prevCart.findIndex(
+            (item) =>
+              item.product.id === quotedProduct.id &&
+              item.selectedPrice === q.price &&
+              item.priceType === q.priceType &&
+              !item.isVoided &&
+              !item.memo
+          );
+
+          if (matchIdx > -1) {
+            const updated = [...prevCart];
+            updated[matchIdx] = {
+              ...updated[matchIdx],
+              quantity: updated[matchIdx].quantity + 1,
+            };
+            return updated;
+          } else {
+            const newLine: CartItem = {
+              lineId: `line-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              product: quotedProduct,
+              quantity: 1,
+              selectedPrice: q.price,
+              priceType: q.priceType,
+              quoteRef: q.quoteRef,
+              isLegacy: false,
+            };
+            return [...prevCart, newLine];
+          }
+        });
+      } catch (err: any) {
+        console.error('Failed to quote product:', err);
+        playBeep('error');
+        setSelectionError('Gagal menghubungkan ke server untuk validasi harga.');
+      } finally {
+        setPendingSelections((prev) => Math.max(0, prev - 1));
+        setTimeout(() => {
+          searchInputRef.current?.focus();
+        }, 50);
+      }
+    },
+    [isGrosirMode, currentUser, playBeep]
+  );
+
   // Handle Barcode Scanner Enter Key (Matches EPPOS EP1400C behavior)
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchQuery.trim()) {
       e.preventDefault();
-      const exactMatch =
-        products.find(
-          (p) => p.barcode.toLowerCase() === searchQuery.trim().toLowerCase()
-        ) || (products.length === 1 ? products[0] : null);
-
-      if (exactMatch) {
-        addToCart(exactMatch);
-        setSearchQuery('');
-      } else {
-        playBeep('error');
-      }
+      const code = searchQuery.trim();
+      setSearchQuery('');
+      selectItem({ barcode: code });
     }
   };
-
-  // Global Keyboard Shortcuts
-  useKeyboardShortcuts({
-    'F2': (e) => searchInputRef.current?.focus(),
-    'F4': (e) => handleToggleGrosir(),
-    'F8': (e) => setIsMemberModalOpen(true),
-    'F9': (e) => { if (cart.length > 0) handleCheckout(); },
-    'F10': (e) => handleOpenSummaryModal(),
-    'Escape': (e) => {
-      setIsMemberModalOpen(false);
-      setIsSummaryModalOpen(false);
-      setIsSettingsModalOpen(false);
-      setMemoItem(null);
-      setVoidItem(null);
-    }
-  });
 
   const handleToggleGrosir = () => {
-    const nextGrosirState = !isGrosirMode;
-    setIsGrosirMode(nextGrosirState);
-
-    setCart((prevCart) =>
-      prevCart.map((item) => {
-        let price = item.product.priceRetail;
-        let priceType: CartItem['priceType'] = 'retail';
-
-        if (nextGrosirState) {
-          if (item.quantity >= 60) {
-            price = item.product.priceGrosir3;
-            priceType = 'grosir3';
-          } else if (item.quantity >= 12) {
-            price = item.product.priceGrosir2;
-            priceType = 'grosir2';
-          } else {
-            price = item.product.priceGrosir1;
-            priceType = 'grosir1';
-          }
-        }
-
-        return {
-          ...item,
-          selectedPrice: price,
-          priceType,
-        };
-      })
-    );
+    // Mode switch only affects future selections; existing cart lines are never repriced
+    setIsGrosirMode((prev) => !prev);
   };
 
-  const addToCart = useCallback((product: Product) => {
-    playBeep('success');
+  // Quantity-only edit: does NOT recalculate or touch unit price or wholesale tiers
+  const updateQty = (lineId: string, delta: number) => {
     setCart((prevCart) => {
-      const existingIndex = prevCart.findIndex((i) => i.product.id === product.id && !i.isVoided);
-      let selectedPrice = product.priceRetail;
-      let priceType: CartItem['priceType'] = 'retail';
+      const idx = prevCart.findIndex((item) => item.lineId === lineId);
+      if (idx === -1) return prevCart;
 
-      if (existingIndex > -1) {
-        const updated = [...prevCart];
-        const newQty = updated[existingIndex].quantity + 1;
-
-        if (isGrosirMode) {
-          if (newQty >= 60) {
-            selectedPrice = product.priceGrosir3;
-            priceType = 'grosir3';
-          } else if (newQty >= 12) {
-            selectedPrice = product.priceGrosir2;
-            priceType = 'grosir2';
-          } else {
-            selectedPrice = product.priceGrosir1;
-            priceType = 'grosir1';
-          }
-        }
-
-        updated[existingIndex] = {
-          ...updated[existingIndex],
-          quantity: newQty,
-          selectedPrice,
-          priceType,
-        };
-        return updated;
-      } else {
-        if (isGrosirMode) {
-          selectedPrice = product.priceGrosir1;
-          priceType = 'grosir1';
-        }
-        return [
-          ...prevCart,
-          {
-            product,
-            quantity: 1,
-            selectedPrice,
-            priceType,
-          },
-        ];
-      }
-    });
-  }, [isGrosirMode, playBeep]);
-
-  const updateQty = (index: number, delta: number) => {
-    setCart((prevCart) => {
-      const updated = [...prevCart];
-      const newQty = updated[index].quantity + delta;
+      const item = prevCart[idx];
+      const newQty = item.quantity + delta;
 
       if (newQty <= 0) {
-        return updated.filter((_, i) => i !== index);
+        return prevCart.filter((i) => i.lineId !== lineId);
       }
 
-      const product = updated[index].product;
-      let selectedPrice = product.priceRetail;
-      let priceType: CartItem['priceType'] = 'retail';
-
-      if (isGrosirMode) {
-        if (newQty >= 60) {
-          selectedPrice = product.priceGrosir3;
-          priceType = 'grosir3';
-        } else if (newQty >= 12) {
-          selectedPrice = product.priceGrosir2;
-          priceType = 'grosir2';
-        } else {
-          selectedPrice = product.priceGrosir1;
-          priceType = 'grosir1';
-        }
-      }
-
-      updated[index] = {
-        ...updated[index],
+      const updated = [...prevCart];
+      updated[idx] = {
+        ...item,
         quantity: newQty,
-        selectedPrice,
-        priceType,
       };
 
       return updated;
@@ -366,17 +408,33 @@ export default function POSClient() {
 
   const handleSaveMemo = (targetItem: CartItem, memo: string) => {
     setCart((prevCart) =>
-      prevCart.map((item) => (item === targetItem ? { ...item, memo } : item))
+      prevCart.map((item) => (item.lineId === targetItem.lineId ? { ...item, memo } : item))
     );
   };
 
   const handleConfirmVoid = (targetItem: CartItem, reason: string) => {
     setCart((prevCart) =>
       prevCart.map((item) =>
-        item === targetItem ? { ...item, isVoided: true, voidReason: reason } : item
+        item.lineId === targetItem.lineId ? { ...item, isVoided: true, voidReason: reason } : item
       )
     );
   };
+
+  // Global Keyboard Shortcuts
+  useKeyboardShortcuts({
+    'F2': () => searchInputRef.current?.focus(),
+    'F4': () => handleToggleGrosir(),
+    'F8': () => setIsMemberModalOpen(true),
+    'F9': () => { if (cart.length > 0 && pendingSelections === 0) handleCheckout(); },
+    'F10': () => handleOpenSummaryModal(),
+    'Escape': () => {
+      setIsMemberModalOpen(false);
+      setIsSummaryModalOpen(false);
+      setIsSettingsModalOpen(false);
+      setMemoItem(null);
+      setVoidItem(null);
+    }
+  });
 
   // --- GLOBAL BARCODE SCANNER ---
   const barcodeBuffer = useRef<string>('');
@@ -384,33 +442,25 @@ export default function POSClient() {
 
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Abaikan jika user sedang mengetik di dalam input field (misal search box, note, modal)
+      // Ignore if user is currently typing in an input or textarea
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
 
       const currentTime = Date.now();
-      
+
       if (e.key === 'Enter') {
-        if (barcodeBuffer.current.length > 2) { // Asumsi barcode lebih dari 2 karakter
+        if (barcodeBuffer.current.length > 2) {
           e.preventDefault();
           const scannedCode = barcodeBuffer.current;
           barcodeBuffer.current = '';
-          
-          const exactMatch = products.find((p) => p.barcode.toLowerCase() === scannedCode.toLowerCase());
-          
-          if (exactMatch) {
-            addToCart(exactMatch);
-          } else {
-            playBeep('error');
-          }
+          selectItem({ barcode: scannedCode });
         }
-      } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) { 
-        // Scanner mengetik sangat cepat (biasanya < 30ms antar karakter)
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
         if (currentTime - lastKeyTime.current > 50) {
-          barcodeBuffer.current = e.key; // Reset jika lebih dari 50ms (berarti ketikan jari manusia)
+          barcodeBuffer.current = e.key;
         } else {
-          barcodeBuffer.current += e.key; // Tambah karakter ke buffer scanner
+          barcodeBuffer.current += e.key;
         }
         lastKeyTime.current = currentTime;
       }
@@ -418,7 +468,7 @@ export default function POSClient() {
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [products, addToCart, playBeep]);
+  }, [selectItem]);
 
   const activeCartItems = cart.filter((item) => !item.isVoided);
   const rawSubtotal = activeCartItems.reduce((sum, item) => sum + item.selectedPrice * item.quantity, 0);
@@ -442,44 +492,89 @@ export default function POSClient() {
   };
 
   const handleCheckout = async () => {
-    if (activeCartItems.length === 0) return;
+    if (activeCartItems.length === 0 || pendingSelections > 0) return;
 
-    // eslint-disable-next-line react-hooks/purity
-    const invNo = `INV-${Date.now().toString().slice(-6)}`;
-    setLastInvoiceNo(invNo);
+    const checkoutKey = `chk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setSelectionError(null);
 
     try {
-      await fetch('/api/transactions', {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (currentUser?.token) {
+        headers['Authorization'] = `Bearer ${currentUser.token}`;
+      }
+
+      const res = await fetch('/api/transactions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
-          invoiceNo: invNo,
+          checkoutKey,
           cashierName: currentUser?.name || 'Kasir',
-          mode: isGrosirMode ? 'Grosir' : 'Retail',
           customerId: selectedCustomer?.id || null,
-          subtotal: rawSubtotal,
-          discountAmount: totalDiscount,
-          taxAmount,
-          serviceCharge: serviceAmount,
-          total: grandTotal,
+          customerName: selectedCustomer?.name || null,
+          voucherCode,
           paymentMethod,
           cashPaid: numPaid,
-          change: changeAmount,
           isGrosirMode,
           items: cart,
         }),
       });
-      fetchProducts(searchQuery);
-    } catch (e) {
-      console.error('Failed to post transaction to PostgreSQL:', e);
-    }
 
-    setIsReceiptOpen(true);
+      const json = await res.json();
+
+      if (!res.ok || !json.success) {
+        playBeep('error');
+        setSelectionError(json.error || 'Gagal memproses transaksi checkout');
+        return;
+      }
+
+      playBeep('success');
+      const savedTx = json.data;
+      setCompletedTransaction(savedTx);
+      setLastInvoiceNo(savedTx.invoiceNo);
+      localStorage.setItem('hk_pos_last_receipt', JSON.stringify(savedTx));
+
+      // Task 5.5: Automatic reset of only the completed generation's state
+      setCart([]);
+      setIsGrosirMode(false);
+      setSelectedCustomer(null);
+      setVoucherCode('');
+      setCashPaid('');
+      setTransactionGen((g) => g + 1);
+
+      // Open receipt modal with the durable saved transaction representation
+      setIsReceiptOpen(true);
+    } catch (err: any) {
+      console.error('Checkout error:', err);
+      playBeep('error');
+      setSelectionError('Gagal menghubungkan ke server saat proses checkout.');
+    }
   };
 
-  const handleLogout = () => {
+  const handleClearCart = () => {
+    setTransactionGen((g) => g + 1);
+    setCart([]);
+    setIsGrosirMode(false);
+    setSelectedCustomer(null);
+    setCashPaid('');
+    setSelectionError(null);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (e) {
+      console.error('Logout error:', e);
+    }
     setCurrentUser(null);
     localStorage.removeItem('hk_pos_user');
+    setTransactionGen((g) => g + 1);
+    setCart([]);
+    setIsGrosirMode(false);
+    setSelectedCustomer(null);
+    setCashPaid('');
+    setSelectionError(null);
     setIsLoginOpen(true);
   };
 
@@ -593,6 +688,22 @@ export default function POSClient() {
             </kbd>
           </button>
 
+          {/* Last Saved Receipt Button */}
+          {completedTransaction && (
+            <button
+              onClick={() => setIsReceiptOpen(true)}
+              className={`cursor-pointer px-3 py-1.5 rounded-xl border flex items-center gap-1.5 text-xs font-bold transition-all active:scale-95 ${
+                isDark
+                  ? 'bg-slate-800 hover:bg-slate-700 text-amber-400 border-slate-700'
+                  : 'bg-white hover:bg-slate-100 text-amber-600 border-slate-300 shadow-xs'
+              }`}
+              title="Lihat atau Cetak Ulang Nota Terakhir"
+            >
+              <Receipt className="w-3.5 h-3.5 text-amber-500" />
+              <span>Nota Terakhir</span>
+            </button>
+          )}
+
           {/* Daily Shift Summary Report Button (F10) */}
           <button
             onClick={handleOpenSummaryModal}
@@ -624,7 +735,7 @@ export default function POSClient() {
             <Settings className="w-4 h-4 text-sky-400" />
           </button>
 
-          {/* Theme & Refresh */}
+          {/* Theme Switcher */}
           <button
             onClick={toggleTheme}
             className={`cursor-pointer p-2 rounded-xl border transition-all active:scale-95 ${
@@ -636,21 +747,10 @@ export default function POSClient() {
             {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-600" />}
           </button>
 
-          <button
-            onClick={() => fetchProducts(searchQuery, true)}
-            disabled={isRefreshing}
-            className={`cursor-pointer p-2 rounded-xl border transition-all active:scale-95 disabled:opacity-50 ${
-              isDark
-                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
-            }`}
-          >
-            <RefreshCw className={`w-4 h-4 text-sky-500 ${isRefreshing ? 'animate-spin' : ''}`} />
-          </button>
-
-          {/* Mode Retail vs Mode Grosir Toggle */}
+          {/* Mode Retail vs Mode Grosir 1 Switch (affects future selections only) */}
           <button
             onClick={handleToggleGrosir}
+            title="Pilih mode harga untuk pemilihan berikutnya"
             className={`cursor-pointer px-3 py-1.5 rounded-xl font-black text-xs border flex items-center gap-2 transition-all shadow-md active:scale-95 ${
               isGrosirMode
                 ? 'bg-amber-500 text-slate-950 border-amber-400 hover:bg-amber-400 shadow-amber-500/20'
@@ -660,7 +760,7 @@ export default function POSClient() {
             }`}
           >
             <Repeat className="w-3.5 h-3.5" />
-            <span>{isGrosirMode ? 'MODE GROSIR (F4)' : 'MODE RETAIL (F4)'}</span>
+            <span>{isGrosirMode ? 'GROSIR 1 (F4)' : 'RETAIL (F4)'}</span>
           </button>
         </div>
       </header>
@@ -698,6 +798,22 @@ export default function POSClient() {
             </div>
           </div>
 
+          {/* Actionable Selection Error Banner */}
+          {selectionError && (
+            <div className="mx-4 mt-3 p-3 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{selectionError}</span>
+              </div>
+              <button
+                onClick={() => setSelectionError(null)}
+                className="cursor-pointer text-rose-400 hover:text-rose-200 text-xs font-bold px-2 py-0.5"
+              >
+                Tutup
+              </button>
+            </div>
+          )}
+
           {/* Product Grid */}
           <div className="flex-1 p-4 overflow-y-auto">
             {isLoading ? (
@@ -715,7 +831,7 @@ export default function POSClient() {
                 {products.map((prod) => (
                   <div
                     key={prod.id}
-                    onClick={() => addToCart(prod)}
+                    onClick={() => selectItem({ productId: prod.id })}
                     className={`cursor-pointer p-3.5 rounded-2xl border flex flex-col justify-between transition-all duration-200 group hover:scale-[1.02] active:scale-95 shadow-sm ${
                       isDark
                         ? 'bg-slate-900/80 border-slate-800/80 hover:border-amber-500/60 hover:bg-slate-800/80 text-slate-100'
@@ -747,7 +863,7 @@ export default function POSClient() {
                     <div className="pt-2 border-t border-slate-800/40 flex items-end justify-between mt-2">
                       <div>
                         <span className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-600'} block font-medium`}>
-                          {isGrosirMode ? 'Harga Grosir (Min 12)' : 'Harga Retail'}
+                          {isGrosirMode ? 'Harga Grosir 1' : 'Harga Retail'}
                         </span>
                         <span className="font-extrabold text-sm text-amber-500">
                           Rp{' '}
@@ -767,37 +883,102 @@ export default function POSClient() {
           </div>
         </div>
 
+        {/* RESIZER HANDLE BETWEEN PRODUCT GRID & CART */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Ubah lebar keranjang"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            const startX = e.clientX;
+            const startW = cartWidth;
+            const onMove = (moveEv: MouseEvent) => {
+              updateCartWidth(startW + (startX - moveEv.clientX));
+            };
+            const onUp = () => {
+              window.removeEventListener('mousemove', onMove);
+              window.removeEventListener('mouseup', onUp);
+            };
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
+          }}
+          className={`w-1.5 hover:w-2 -mr-1.5 z-20 cursor-col-resize transition-all shrink-0 select-none group relative ${
+            isDark ? 'hover:bg-amber-500/80 bg-transparent' : 'hover:bg-amber-400 bg-transparent'
+          }`}
+          title="Geser untuk mengatur lebar panel keranjang"
+        >
+          <div className="absolute inset-y-0 -left-1 -right-1 cursor-col-resize" />
+        </div>
+
         {/* RIGHT COLUMN: CART & CHECKOUT */}
         <div
-          className={`w-96 lg:w-[420px] border-l flex flex-col shrink-0 overflow-hidden ${
+          style={{ width: `${cartWidth}px`, minWidth: `${MIN_CART_WIDTH}px`, maxWidth: `${MAX_CART_WIDTH}px` }}
+          className={`border-l flex flex-col shrink-0 overflow-hidden ${
             isDark ? 'border-slate-800 bg-slate-900/90' : 'border-slate-200 bg-white'
           }`}
         >
           {/* Cart Header */}
           <div
-            className={`p-4 border-b flex items-center justify-between shrink-0 ${
+            className={`p-4 border-b flex items-center justify-between shrink-0 gap-2 ${
               isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'
             }`}
           >
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500 shrink-0">
                 <ShoppingCart className="w-5 h-5" />
               </div>
-              <div>
-                <h2 className="font-bold text-base">Keranjang Transaksi ({isGrosirMode ? 'Grosir' : 'Retail'})</h2>
-                <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                  {activeCartItems.length} Item Unique • Total Qty: {totalItemsCount}
+              <div className="min-w-0">
+                <h2 className="font-bold text-base truncate">Keranjang ({isGrosirMode ? 'Grosir' : 'Retail'})</h2>
+                <p className={`text-xs truncate ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                  {activeCartItems.length} Item • Total Qty: {totalItemsCount}
                 </p>
               </div>
             </div>
-            {cart.length > 0 && (
-              <button
-                onClick={() => setCart([])}
-                className="cursor-pointer text-xs font-semibold text-rose-400 hover:text-rose-300 p-1.5 rounded-lg hover:bg-rose-500/10 active:scale-95 transition-colors"
-              >
-                Kosongkan
-              </button>
-            )}
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Cart Width Controls */}
+              <div className="flex items-center gap-1 text-[11px] font-mono">
+                <button
+                  type="button"
+                  onClick={() => updateCartWidth(cartWidth - 30)}
+                  className={`w-6 h-6 rounded flex items-center justify-center cursor-pointer transition-colors ${
+                    isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                  }`}
+                  title="Perkecil panel keranjang (-30px)"
+                >
+                  -
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateCartWidth(cartWidth + 30)}
+                  className={`w-6 h-6 rounded flex items-center justify-center cursor-pointer transition-colors ${
+                    isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                  }`}
+                  title="Perlebar panel keranjang (+30px)"
+                >
+                  +
+                </button>
+                {cartWidth !== DEFAULT_CART_WIDTH && (
+                  <button
+                    type="button"
+                    onClick={resetCartWidth}
+                    className="px-1.5 h-6 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 font-bold text-[10px] cursor-pointer transition-colors"
+                    title="Reset lebar panel keranjang"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+
+              {cart.length > 0 && (
+                <button
+                  onClick={handleClearCart}
+                  className="cursor-pointer text-xs font-semibold text-rose-400 hover:text-rose-300 p-1.5 rounded-lg hover:bg-rose-500/10 active:scale-95 transition-colors ml-1"
+                >
+                  Kosongkan
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Cart Items List */}
@@ -806,12 +987,12 @@ export default function POSClient() {
               <div className={`h-full flex flex-col items-center justify-center ${isDark ? 'text-slate-500' : 'text-slate-600'} gap-2 italic`}>
                 <ShoppingCart className={`w-12 h-12 stroke-1 ${isDark ? 'text-slate-600' : 'text-slate-400'}`} />
                 <span className="text-sm font-semibold">Keranjang masih kosong</span>
-                <span className="text-xs">Klik produk di kiri untuk menambahkan</span>
+                <span className="text-xs">Klik produk di kiri atau scan barcode untuk menambahkan</span>
               </div>
             ) : (
-              cart.map((item, idx) => (
+              cart.map((item) => (
                 <div
-                  key={idx}
+                  key={item.lineId}
                   className={`p-3 rounded-2xl border transition-all ${
                     item.isVoided
                       ? 'opacity-40 line-through border-rose-800/40 bg-rose-950/10'
@@ -820,22 +1001,27 @@ export default function POSClient() {
                       : 'bg-white border-slate-200'
                   }`}
                 >
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <h4 className={`font-bold text-xs ${isDark ? 'text-slate-200' : 'text-slate-900'} line-clamp-1`}>
+                  <div className="flex justify-between items-start gap-2 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <h4 className={`font-bold text-xs ${isDark ? 'text-slate-200' : 'text-slate-900'} break-words whitespace-normal leading-snug`}>
                         {item.product.name}
                       </h4>
                       <div className={`flex items-center gap-2 text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-600'} mt-0.5`}>
                         <span>Rp {item.selectedPrice.toLocaleString('id-ID')}</span>
-                        {isGrosirMode && (
-                          <span className="px-1.5 py-0.2 rounded-xs bg-amber-500/10 text-amber-400 text-[10px] font-bold">
+                        {item.priceType !== 'retail' && (
+                          <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[10px] font-bold">
                             {item.priceType.toUpperCase()}
+                          </span>
+                        )}
+                        {item.isLegacy && (
+                          <span className="px-1.5 py-0.5 rounded bg-slate-500/20 text-slate-400 text-[9px] font-medium">
+                            LEGACY
                           </span>
                         )}
                       </div>
                     </div>
 
-                    <span className="font-extrabold text-sm text-amber-500">
+                    <span className="font-extrabold text-sm text-amber-500 shrink-0">
                       Rp {(item.selectedPrice * item.quantity).toLocaleString('id-ID')}
                     </span>
                   </div>
@@ -870,14 +1056,14 @@ export default function POSClient() {
                       {/* Qty Controls */}
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => updateQty(idx, -1)}
+                          onClick={() => updateQty(item.lineId, -1)}
                           className={`cursor-pointer w-6 h-6 rounded-lg ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'} flex items-center justify-center font-bold text-xs active:scale-95 transition-all`}
                         >
                           <Minus className="w-3 h-3" />
                         </button>
                         <span className="font-bold text-xs w-5 text-center">{item.quantity}</span>
                         <button
-                          onClick={() => updateQty(idx, 1)}
+                          onClick={() => updateQty(item.lineId, 1)}
                           className={`cursor-pointer w-6 h-6 rounded-lg ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'} flex items-center justify-center font-bold text-xs active:scale-95 transition-all`}
                         >
                           <Plus className="w-3 h-3" />
@@ -1020,11 +1206,20 @@ export default function POSClient() {
             {/* Checkout Button (F9) */}
             <button
               onClick={handleCheckout}
-              disabled={activeCartItems.length === 0}
+              disabled={activeCartItems.length === 0 || pendingSelections > 0}
               className="cursor-pointer w-full py-3 rounded-xl font-black text-sm bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 hover:from-amber-400 hover:to-yellow-400 active:scale-98 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              <Receipt className="w-5 h-5" />
-              <span>Bayar & Simpan (F9)</span>
+              {pendingSelections > 0 ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Memvalidasi Harga ({pendingSelections})...</span>
+                </>
+              ) : (
+                <>
+                  <Receipt className="w-5 h-5" />
+                  <span>Bayar & Simpan (F9)</span>
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -1071,7 +1266,6 @@ export default function POSClient() {
         isOpen={isSummaryModalOpen}
         isDark={isDark}
         currentUser={currentUser}
-        summary={shiftSummary}
         onClose={() => setIsSummaryModalOpen(false)}
         isConnected={isConnected}
         onPrintText={printText}
@@ -1091,10 +1285,11 @@ export default function POSClient() {
       <ReceiptModal
         isOpen={isReceiptOpen}
         onClose={() => setIsReceiptOpen(false)}
+        transaction={completedTransaction}
         cart={cart}
         cashierName={currentUser?.name || 'Kasir'}
-        cashPaid={numPaid}
-        invoiceNo={lastInvoiceNo || 'DRAFT'}
+        cashPaid={typeof cashPaid === 'number' ? cashPaid : grandTotal}
+        invoiceNo={completedTransaction?.invoiceNo || lastInvoiceNo || 'DRAFT'}
         orderType={isGrosirMode ? 'Grosir' : 'Retail'}
         customer={selectedCustomer}
         paymentMethod={paymentMethod}

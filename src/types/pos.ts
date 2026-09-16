@@ -14,10 +14,13 @@ export interface Product {
 }
 
 export interface CartItem {
+  lineId: string;
   product: Product;
   quantity: number;
   selectedPrice: number;
   priceType: 'retail' | 'grosir1' | 'grosir2' | 'grosir3';
+  quoteRef?: string;
+  isLegacy?: boolean;
   memo?: string;
   isVoided?: boolean;
   voidReason?: string;

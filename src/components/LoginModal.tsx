@@ -32,7 +32,7 @@ export default function LoginModal({
     setError('');
 
     try {
-      const res = await fetch('/api/users', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -40,7 +40,7 @@ export default function LoginModal({
       const json = await res.json();
 
       if (!json.success || !json.data) {
-        setError(json.error || 'Username kasir tidak ditemukan di database.');
+        setError(json.error || 'Username atau password kasir tidak valid.');
         return;
       }
 
@@ -49,6 +49,9 @@ export default function LoginModal({
         username: json.data.username,
         name: json.data.name,
         role: json.data.role,
+        token: json.token,
+        hasHpp: json.data.hasHpp,
+        canViewAllCashiers: json.data.canViewAllCashiers,
       };
 
       if (onSelectUser) onSelectUser(dbUser);

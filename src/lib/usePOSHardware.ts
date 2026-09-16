@@ -87,33 +87,53 @@ export function usePOSHardware() {
     }
   }, [port]);
 
-  const printText = useCallback(async (text: string) => {
+  const [isPrinting, setIsPrinting] = useState(false);
+
+  const printText = useCallback(async (text: string): Promise<{ success: boolean; error?: string }> => {
+    if (isPrinting) {
+      return { success: false, error: 'Pencetakan sedang berlangsung, mohon tunggu.' };
+    }
+    setIsPrinting(true);
+
     if (!port) {
       // Fallback if no serial printer is connected
-      console.warn('Printer tidak terhubung via WebSerial. Menggunakan fallback console log.');
-      console.log('--- MOCK PRINT ---');
-      console.log(text);
-      console.log('------------------');
-      
-      // Attempt standard window.print() if fallback is acceptable
-      window.print();
-      return;
+      console.warn('Printer tidak terhubung via WebSerial. Menggunakan fallback window.print().');
+      try {
+        window.print();
+        return { success: true };
+      } catch (err: unknown) {
+        return { success: false, error: err instanceof Error ? err.message : 'Gagal membuka dialog cetak browser.' };
+      } finally {
+        setIsPrinting(false);
+      }
     }
 
+    let writer: WritableStreamDefaultWriter<Uint8Array> | null = null;
     try {
       const encoder = new TextEncoder();
-      const writer = (port as { writable: { getWriter: () => any } }).writable.getWriter();
+      writer = (port as unknown as { writable: WritableStream<Uint8Array> }).writable.getWriter();
       
       // Convert text and ESC/POS commands to Uint8Array
       const data = encoder.encode(text);
-      
       await writer.write(data);
-      await writer.releaseLock();
-    } catch (err) {
-      console.error('Gagal mencetak:', err);
-      alert('Gagal mencetak ke printer. Periksa koneksi USB/Serial.');
+      return { success: true };
+    } catch (err: unknown) {
+      console.error('Gagal mencetak ke printer serial:', err);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Gagal mencetak ke printer serial. Periksa koneksi kabel USB/Serial.',
+      };
+    } finally {
+      if (writer) {
+        try {
+          writer.releaseLock();
+        } catch (releaseErr) {
+          console.warn('Gagal melepaskan kunci writer serial:', releaseErr);
+        }
+      }
+      setIsPrinting(false);
     }
-  }, [port]);
+  }, [port, isPrinting]);
 
   const formatStruk = useCallback((lines: string[]) => {
     // Basic ESC/POS formatting builder
@@ -133,6 +153,7 @@ export function usePOSHardware() {
 
   return {
     isConnected,
+    isPrinting,
     connectPrinter,
     disconnectPrinter,
     printText,
