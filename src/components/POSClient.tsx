@@ -528,509 +528,143 @@ export default function POSClient() {
   const isDark = theme === 'dark';
 
   return (
-    <div
-      className={`h-screen w-screen flex flex-col font-sans overflow-hidden select-none transition-colors duration-200 ${
-        isDark ? 'bg-[#070b14] text-slate-100' : 'bg-slate-100 text-slate-900'
-      }`}
-    >
+    <div className={`h-screen w-screen flex flex-col font-sans overflow-hidden select-none transition-colors duration-200 ${isDark ? 'bg-[#1e1e1e] text-slate-100' : 'bg-[#f0f0f0] text-slate-900'}`}>
       {/* TOP NAVIGATION TOOLBAR */}
-      <header
-        className={`h-16 border-b px-6 flex items-center justify-between shrink-0 z-30 shadow-md transition-colors ${
-          isDark
-            ? 'border-slate-800/80 bg-slate-900/95 text-white'
-            : 'border-slate-200 bg-white text-slate-900'
-        }`}
-      >
-        {/* Left Branding */}
+      <header className={`h-12 border-b flex items-center justify-between shrink-0 shadow-sm text-sm font-semibold px-4 ${isDark ? 'border-slate-800 bg-[#2d2d2d] text-white' : 'border-slate-300 bg-[#e0e0e0] text-slate-800'}`}>
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 via-teal-400 to-amber-500 flex items-center justify-center shadow-lg shadow-emerald-500/25 ring-1 ring-white/20">
-              <Store className="w-5 h-5 text-slate-950 font-bold" />
-            </div>
-            <div>
-              <h1 className="font-extrabold text-base tracking-tight flex items-center gap-2">
-                {posSettings.storeName}
-              </h1>
-              <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                {posSettings.storeAddress}
-              </p>
-            </div>
+          <div className="flex items-center gap-2 text-amber-600">
+            <FileText className="w-4 h-4" />
+            <span>Mode {isGrosirMode ? 'Grosir' : 'Retail'}</span>
           </div>
-
-          <div className={`h-6 w-px hidden md:block ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
-
-          {/* Clean Cashier Account Button */}
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsLoginOpen(true)}
-              className="cursor-pointer px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 hover:bg-emerald-500/25 active:scale-95 transition-all"
+            <span className="text-slate-500">Grosir Request</span>
+            <button 
+              onClick={handleToggleGrosir}
+              className={`cursor-pointer w-10 h-5 rounded-full relative transition-colors ${isGrosirMode ? 'bg-amber-500' : 'bg-slate-400'}`}
             >
-              <UserIcon className="w-3.5 h-3.5" />
-              <span>Kasir: {currentUser ? currentUser.name : 'Belum Login'}</span>
+              <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${isGrosirMode ? 'translate-x-5' : ''}`} />
             </button>
+            <span className="text-slate-500">Retail</span>
           </div>
         </div>
-
-        {/* Right Tools & Shortcuts Bar */}
-        <div className="flex items-center gap-3">
-          {/* Member / Customer Button (F8) */}
-          <button
-            onClick={() => setIsMemberModalOpen(true)}
-            className={`cursor-pointer px-3 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all active:scale-95 ${
-              selectedCustomer
-                ? 'bg-blue-500/20 text-blue-500 border-blue-500/40 hover:bg-blue-500/30'
-                : isDark
-                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300 shadow-xs'
-            }`}
-          >
-            <UserCheck className="w-3.5 h-3.5 text-blue-500" />
-            <span>{selectedCustomer ? selectedCustomer.name : 'Member / Pelanggan'}</span>
-            <kbd className={`hidden lg:inline text-[9px] px-1.5 py-0.5 rounded font-mono font-bold ${
-              isDark ? 'bg-slate-950/60 text-slate-300 border border-slate-700/60' : 'bg-slate-100 text-slate-700 border border-slate-300'
-            }`}>
-              F8
-            </kbd>
-          </button>
-
-          {/* Daily Shift Summary Report Button (F10) */}
-          <button
-            onClick={handleOpenSummaryModal}
-            className={`cursor-pointer px-3 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-bold transition-all active:scale-95 ${
-              isDark
-                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300 shadow-xs'
-            }`}
-          >
-            <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Laporan Shift</span>
-            <kbd className={`hidden lg:inline text-[9px] px-1.5 py-0.5 rounded font-mono font-bold ${
-              isDark ? 'bg-slate-950/60 text-slate-300 border border-slate-700/60' : 'bg-slate-100 text-slate-700 border border-slate-300'
-            }`}>
-              F10
-            </kbd>
-          </button>
-
-          {/* Settings Button */}
-          <button
-            onClick={() => setIsSettingsModalOpen(true)}
-            className={`cursor-pointer p-2 rounded-xl border transition-all active:scale-95 ${
-              isDark
-                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
-            }`}
-            title="Pengaturan POS & Printer"
-          >
-            <Settings className="w-4 h-4 text-sky-400" />
-          </button>
-
-          {/* Theme & Refresh */}
-          <button
-            onClick={toggleTheme}
-            className={`cursor-pointer p-2 rounded-xl border transition-all active:scale-95 ${
-              isDark
-                ? 'bg-slate-800 hover:bg-slate-700 text-amber-400 border-slate-700'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
-            }`}
-          >
-            {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-600" />}
-          </button>
-
-          <button
-            onClick={() => fetchProducts(searchQuery, true)}
-            disabled={isRefreshing}
-            className={`cursor-pointer p-2 rounded-xl border transition-all active:scale-95 disabled:opacity-50 ${
-              isDark
-                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
-            }`}
-          >
-            <RefreshCw className={`w-4 h-4 text-sky-500 ${isRefreshing ? 'animate-spin' : ''}`} />
-          </button>
-
-          {/* Mode Retail vs Mode Grosir Toggle */}
-          <button
-            onClick={handleToggleGrosir}
-            className={`cursor-pointer px-3 py-1.5 rounded-xl font-black text-xs border flex items-center gap-2 transition-all shadow-md active:scale-95 ${
-              isGrosirMode
-                ? 'bg-amber-500 text-slate-950 border-amber-400 hover:bg-amber-400 shadow-amber-500/20'
-                : isDark
-                ? 'bg-slate-800 border-slate-700 text-emerald-400 hover:bg-slate-700'
-                : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-            }`}
-          >
-            <Repeat className="w-3.5 h-3.5" />
-            <span>{isGrosirMode ? 'MODE GROSIR (F4)' : 'MODE RETAIL (F4)'}</span>
+        <div className="flex items-center gap-6 text-slate-500">
+          <span>{new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+          <span>{new Date().toLocaleTimeString('id-ID')}</span>
+          <button className="cursor-pointer flex items-center gap-1 text-rose-500 hover:text-rose-600 transition-colors">
+            <span className="font-bold">X</span> Keluar
           </button>
         </div>
       </header>
 
       {/* MAIN WORKSPACE GRID */}
       <div className="flex-1 flex overflow-hidden">
-        {/* LEFT COLUMN: PRODUCTS & SEARCH */}
-        <div className="flex-1 flex flex-col min-w-0 border-r border-slate-800/60 overflow-hidden">
-          {/* Search Bar (Matches POS repo _Ed_Barcode / _Ed_BarcodeGrosir) */}
-          <div
-            className={`p-4 border-b shrink-0 ${
-              isDark ? 'border-slate-800 bg-slate-900/60' : 'border-slate-200 bg-slate-50'
-            }`}
-          >
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={handleSearchKeyDown}
-                placeholder="Cari Produk / Scan Barcode (F2)..."
-                className={`w-full pl-10 pr-10 py-2.5 rounded-xl text-sm font-medium border outline-none transition-all ${
-                  isDark
-                    ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-amber-500 ring-amber-500/20'
-                    : 'bg-white border-slate-200 text-slate-900 focus:border-amber-500'
-                }`}
-              />
-              <kbd className={`absolute right-3 top-3 text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
-                isDark ? 'bg-slate-800 text-slate-300 border border-slate-700' : 'bg-slate-200 text-slate-700 border border-slate-300'
-              }`}>
-                F2
-              </kbd>
+        {/* LEFT COLUMN: MAIN POS TABLE */}
+        <div className={`flex-1 flex flex-col min-w-0 border-r ${isDark ? 'border-slate-700 bg-[#1e1e1e]' : 'border-slate-300 bg-[#f9fafb]'}`}>
+          <div className={`p-4 flex justify-between items-start border-b ${isDark ? 'border-slate-700' : 'border-slate-300'}`}>
+            <div className="flex flex-col gap-4">
+              <div className="text-xs text-slate-500 font-semibold">No. Transaksi <span className="text-amber-600 ml-1">PS260905037</span></div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-slate-400">#</span>
+                <input type="number" defaultValue="1" className={`w-12 border rounded px-2 py-1 text-sm text-center outline-none ${isDark ? 'bg-slate-800 border-slate-600 text-slate-200' : 'bg-white border-slate-300 text-slate-800'}`} />
+                <span className="text-sm font-semibold text-slate-400 ml-4">Barcode :</span>
+                <input 
+                  ref={searchInputRef}
+                  type="text" 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={handleSearchKeyDown}
+                  className={`w-80 border rounded px-3 py-1.5 text-sm outline-none transition-colors ${isDark ? 'bg-amber-900/20 border-amber-500/50 focus:bg-slate-800 text-slate-200' : 'bg-yellow-50 border-yellow-200 focus:bg-white focus:border-amber-500 text-slate-900'}`} 
+                />
+              </div>
+            </div>
+            <div className={`text-[3.5rem] leading-none font-medium tabular-nums tracking-tighter ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+              {grandTotal.toLocaleString('id-ID')}
             </div>
           </div>
-
-          {/* Product Grid */}
-          <div className="flex-1 p-4 overflow-y-auto">
-            {isLoading ? (
-              <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-2">
-                <RefreshCw className="w-8 h-8 animate-spin text-amber-500" />
-                <span className="text-xs font-semibold">Memuat Data dari PostgreSQL...</span>
-              </div>
-            ) : products.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-2">
-                <Barcode className="w-12 h-12 stroke-1 text-slate-600" />
-                <span className="text-sm font-semibold">Produk tidak ditemukan</span>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5">
-                {products.map((prod) => (
-                  <div
-                    key={prod.id}
-                    onClick={() => addToCart(prod)}
-                    className={`cursor-pointer p-3.5 rounded-2xl border flex flex-col justify-between transition-all duration-200 group hover:scale-[1.02] active:scale-95 shadow-sm ${
-                      isDark
-                        ? 'bg-slate-900/80 border-slate-800/80 hover:border-amber-500/60 hover:bg-slate-800/80 text-slate-100'
-                        : 'bg-white border-slate-200 hover:border-amber-500/60 hover:shadow-md text-slate-900'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between text-[11px] mb-1.5">
-                        <span className={`${isDark ? 'text-slate-400' : 'text-slate-600'} font-mono truncate max-w-[100px]`}>
-                          {prod.barcode}
-                        </span>
-                        <span
-                          className={`px-2 py-0.5 rounded-full font-bold uppercase text-[9px] ${
-                            prod.stock > 5
-                              ? 'bg-emerald-500/15 text-emerald-400'
-                              : prod.stock > 0
-                              ? 'bg-amber-500/15 text-amber-400'
-                              : 'bg-rose-500/15 text-rose-400'
-                          }`}
-                        >
-                          Stok: {prod.stock}
-                        </span>
-                      </div>
-                      <h3 className="font-bold text-sm leading-snug line-clamp-2 mb-2 group-hover:text-amber-400 transition-colors">
-                        <HighlightText text={prod.name} query={searchQuery} isDark={isDark} />
-                      </h3>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-800/40 flex items-end justify-between mt-2">
-                      <div>
-                        <span className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-600'} block font-medium`}>
-                          {isGrosirMode ? 'Harga Grosir (Min 12)' : 'Harga Retail'}
-                        </span>
-                        <span className="font-extrabold text-sm text-amber-500">
-                          Rp{' '}
-                          {(isGrosirMode ? prod.priceGrosir1 : prod.priceRetail).toLocaleString(
-                            'id-ID'
-                          )}
-                        </span>
-                      </div>
-                      <div className="cursor-pointer w-7 h-7 rounded-xl bg-amber-500/10 text-amber-500 group-hover:bg-amber-500 group-hover:text-slate-950 transition-colors flex items-center justify-center">
-                        <Plus className="w-4 h-4 stroke-[3]" />
-                      </div>
-                    </div>
-                  </div>
+          
+          <div className="flex-1 overflow-auto">
+            <table className="w-full text-sm text-left">
+              <thead className={`sticky top-0 z-10 ${isDark ? 'bg-[#2d2d2d] text-slate-300' : 'bg-[#e0e0e0] text-slate-700'}`}>
+                <tr>
+                  <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} w-1/2`}>Barang</th>
+                  <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} text-center w-24`}>Stok</th>
+                  <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} text-center w-16`}>#</th>
+                  <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} text-right w-32`}>Harga @unit</th>
+                  <th className="px-4 py-2 font-semibold text-right w-32">Harga Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className={`${isDark ? 'bg-[#262626] border-slate-700 text-slate-500' : 'bg-[#f0f0f0] border-slate-300 text-slate-400'} border-b italic text-center`}>
+                  <td colSpan={5} className="px-4 py-1.5 text-[11px]">Click here to add a new row</td>
+                </tr>
+                {activeCartItems.map((item, idx) => (
+                  <tr key={idx} className={`border-b ${isDark ? 'border-slate-700' : 'border-slate-200'} ${idx % 2 === 0 ? (isDark ? 'bg-[#1e1e1e]' : 'bg-white') : (isDark ? 'bg-[#1a1a1a]' : 'bg-slate-50')}`}>
+                    <td className={`px-4 py-2.5 border-r font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.product.name}</td>
+                    <td className={`px-4 py-2.5 border-r text-center font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.product.stock}</td>
+                    <td className={`px-4 py-2.5 border-r text-center font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.quantity}</td>
+                    <td className={`px-4 py-2.5 border-r text-right font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.selectedPrice.toLocaleString('id-ID')}</td>
+                    <td className={`px-4 py-2.5 text-right font-medium ${isDark ? 'text-sky-400' : 'text-sky-700'}`}>{(item.selectedPrice * item.quantity).toLocaleString('id-ID')}</td>
+                  </tr>
                 ))}
-              </div>
-            )}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        {/* RIGHT COLUMN: CART & CHECKOUT */}
-        <div
-          className={`w-96 lg:w-[420px] border-l flex flex-col shrink-0 overflow-hidden ${
-            isDark ? 'border-slate-800 bg-slate-900/90' : 'border-slate-200 bg-white'
-          }`}
-        >
-          {/* Cart Header */}
-          <div
-            className={`p-4 border-b flex items-center justify-between shrink-0 ${
-              isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
-                <ShoppingCart className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="font-bold text-base">Keranjang Transaksi ({isGrosirMode ? 'Grosir' : 'Retail'})</h2>
-                <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                  {activeCartItems.length} Item Unique • Total Qty: {totalItemsCount}
-                </p>
-              </div>
+        {/* RIGHT COLUMN: RECEIPT */}
+        <div className={`w-[320px] flex flex-col p-4 shadow-inner border-l ${isDark ? 'bg-[#2a2a2a] border-slate-900' : 'bg-[#d1d5db] border-slate-300'}`}>
+          <div className={`flex-1 flex flex-col shadow-sm border font-mono text-xs ${isDark ? 'bg-[#1a1a1a] border-slate-600 text-slate-300' : 'bg-white border-slate-300 text-slate-800'}`}>
+            <div className="flex-1 overflow-auto">
+              <table className="w-full text-left">
+                <thead className={`border-b-2 ${isDark ? 'border-slate-600' : 'border-slate-800'}`}>
+                  <tr>
+                    <th className="py-2 pl-2 pr-1 w-8 text-center">#</th>
+                    <th className="py-2 px-1">Barang</th>
+                    <th className="py-2 pl-1 pr-2 text-right">Sub Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeCartItems.map((item, idx) => (
+                    <tr key={idx} className="align-top">
+                      <td className="py-1.5 pl-2 pr-1 text-center">{item.quantity}</td>
+                      <td className="py-1.5 px-1 pr-2 leading-tight">{item.product.name}</td>
+                      <td className="py-1.5 pl-1 pr-2 text-right">{(item.selectedPrice * item.quantity).toLocaleString('id-ID')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            {cart.length > 0 && (
-              <button
-                onClick={() => setCart([])}
-                className="cursor-pointer text-xs font-semibold text-rose-400 hover:text-rose-300 p-1.5 rounded-lg hover:bg-rose-500/10 active:scale-95 transition-colors"
-              >
-                Kosongkan
+            
+            <div className={`mt-auto border-t-2 p-2 flex justify-between font-bold ${isDark ? 'border-slate-600' : 'border-slate-800'}`}>
+              <span>{activeCartItems.length} Jenis</span>
+              <span>Total : {grandTotal.toLocaleString('id-ID')}</span>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-col gap-2">
+            <div className={`text-center text-xs mb-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              Activate Windows<br/>
+              <span className="text-[10px]">Go to Settings to activate Windows.</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <button className={`cursor-pointer flex-1 py-3 rounded text-sm font-semibold border flex justify-center items-center gap-2 shadow-sm transition-colors ${isDark ? 'bg-slate-700 hover:bg-slate-600 text-slate-200 border-slate-600' : 'bg-[#e5e7eb] hover:bg-[#d1d5db] text-slate-800 border-slate-400'}`}>
+                <FileText className="w-4 h-4" />
+                Reprint Bill
               </button>
-            )}
-          </div>
-
-          {/* Cart Items List */}
-          <div className="flex-1 p-4 overflow-y-auto space-y-3">
-            {cart.length === 0 ? (
-              <div className={`h-full flex flex-col items-center justify-center ${isDark ? 'text-slate-500' : 'text-slate-600'} gap-2 italic`}>
-                <ShoppingCart className={`w-12 h-12 stroke-1 ${isDark ? 'text-slate-600' : 'text-slate-400'}`} />
-                <span className="text-sm font-semibold">Keranjang masih kosong</span>
-                <span className="text-xs">Klik produk di kiri untuk menambahkan</span>
-              </div>
-            ) : (
-              cart.map((item, idx) => (
-                <div
-                  key={idx}
-                  className={`p-3 rounded-2xl border transition-all ${
-                    item.isVoided
-                      ? 'opacity-40 line-through border-rose-800/40 bg-rose-950/10'
-                      : isDark
-                      ? 'bg-slate-950/60 border-slate-800'
-                      : 'bg-white border-slate-200'
-                  }`}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <h4 className={`font-bold text-xs ${isDark ? 'text-slate-200' : 'text-slate-900'} line-clamp-1`}>
-                        {item.product.name}
-                      </h4>
-                      <div className={`flex items-center gap-2 text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-600'} mt-0.5`}>
-                        <span>Rp {item.selectedPrice.toLocaleString('id-ID')}</span>
-                        {isGrosirMode && (
-                          <span className="px-1.5 py-0.2 rounded-xs bg-amber-500/10 text-amber-400 text-[10px] font-bold">
-                            {item.priceType.toUpperCase()}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <span className="font-extrabold text-sm text-amber-500">
-                      Rp {(item.selectedPrice * item.quantity).toLocaleString('id-ID')}
-                    </span>
-                  </div>
-
-                  {/* Memo Display */}
-                  {item.memo && (
-                    <div className="text-[11px] text-amber-400 bg-amber-500/10 px-2 py-1 rounded-lg mb-2 italic">
-                      Catatan: {item.memo}
-                    </div>
-                  )}
-
-                  {/* Item Actions Toolbar */}
-                  {!item.isVoided && (
-                    <div className={`flex items-center justify-between pt-2 border-t ${isDark ? 'border-slate-800/40' : 'border-slate-100'}`}>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setMemoItem(item)}
-                          className={`cursor-pointer px-2 py-1 rounded-lg ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'} text-[10px] font-bold flex items-center gap-1 active:scale-95 transition-all`}
-                        >
-                          <FileText className="w-3 h-3 text-amber-500" />
-                          <span>Note</span>
-                        </button>
-                        <button
-                          onClick={() => setVoidItem(item)}
-                          className="cursor-pointer px-2 py-1 rounded-lg bg-rose-950/30 hover:bg-rose-900/40 text-rose-400 text-[10px] font-bold flex items-center gap-1 active:scale-95 transition-all"
-                        >
-                          <ShieldAlert className="w-3 h-3" />
-                          <span>Void</span>
-                        </button>
-                      </div>
-
-                      {/* Qty Controls */}
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => updateQty(idx, -1)}
-                          className={`cursor-pointer w-6 h-6 rounded-lg ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'} flex items-center justify-center font-bold text-xs active:scale-95 transition-all`}
-                        >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <span className="font-bold text-xs w-5 text-center">{item.quantity}</span>
-                        <button
-                          onClick={() => updateQty(idx, 1)}
-                          className={`cursor-pointer w-6 h-6 rounded-lg ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'} flex items-center justify-center font-bold text-xs active:scale-95 transition-all`}
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Checkout & Summary Panel */}
-          <div
-            className={`p-4 border-t space-y-3 shrink-0 ${
-              isDark ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white'
-            }`}
-          >
-            {/* Customer Banner */}
-            {selectedCustomer && (
-              <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-between text-xs">
-                <span className="font-bold text-blue-500">
-                  Pelanggan: {selectedCustomer.name}
-                </span>
-                <span className="text-[10px] bg-blue-500/20 text-blue-500 px-2 py-0.5 rounded-full font-bold">
-                  Diskon {selectedCustomer.discountPercent}%
-                </span>
-              </div>
-            )}
-
-            {/* Summary Lines */}
-            <div className="space-y-1 text-xs">
-              <div className={`flex justify-between ${isDark ? 'text-slate-400' : 'text-slate-700'} font-medium`}>
-                <span>Subtotal</span>
-                <span>Rp {rawSubtotal.toLocaleString('id-ID')}</span>
-              </div>
-
-              {totalDiscount > 0 && (
-                <div className="flex justify-between text-rose-500 font-bold">
-                  <span>Diskon Member / Voucher</span>
-                  <span>- Rp {totalDiscount.toLocaleString('id-ID')}</span>
-                </div>
-              )}
-
-              {taxAmount > 0 && (
-                <div className={`flex justify-between ${isDark ? 'text-slate-400' : 'text-slate-700'} font-medium`}>
-                  <span>Pajak ({posSettings.taxPercent}%)</span>
-                  <span>Rp {taxAmount.toLocaleString('id-ID')}</span>
-                </div>
-              )}
-
-              {serviceAmount > 0 && (
-                <div className={`flex justify-between ${isDark ? 'text-slate-400' : 'text-slate-700'} font-medium`}>
-                  <span>Service ({posSettings.servicePercent}%)</span>
-                  <span>Rp {serviceAmount.toLocaleString('id-ID')}</span>
-                </div>
-              )}
-
-              <div className={`flex justify-between text-base font-black pt-1 border-t ${isDark ? 'text-slate-100 border-slate-800' : 'text-slate-900 border-slate-200'}`}>
-                <span>Total Tagihan</span>
-                <span className="text-amber-500">Rp {grandTotal.toLocaleString('id-ID')}</span>
-              </div>
+              <button 
+                onClick={handleCheckout}
+                disabled={activeCartItems.length === 0}
+                className="cursor-pointer flex-1 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white py-3 rounded text-sm font-semibold border border-emerald-600 flex justify-center items-center gap-2 shadow-sm transition-colors"
+              >
+                <CreditCard className="w-4 h-4" />
+                Payment
+              </button>
             </div>
-
-            {/* Payment Method Selector */}
-            <div>
-              <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-700'} mb-1.5 block`}>
-                Metode Pembayaran
-              </label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {(['CASH', 'EDC', 'TRANSFER', 'QRIS', 'SHOPEE', 'TOKOPEDIA'] as PaymentMethod[]).map((method) => (
-                  <button
-                    key={method}
-                    onClick={() => {
-                      setPaymentMethod(method);
-                      if (method !== 'CASH') {
-                        setCashPaid(grandTotal);
-                      }
-                    }}
-                    className={`cursor-pointer py-2 rounded-xl text-xs font-black border transition-all active:scale-95 ${
-                      paymentMethod === method
-                        ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/20'
-                        : isDark
-                        ? 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700'
-                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    {method}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Quick Cash Presets */}
-            <div>
-              <label className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-700'} mb-1.5 block`}>
-                Nominal Bayar Cepat
-              </label>
-              <div className="grid grid-cols-4 gap-1.5">
-                {[20000, 50000, 100000, grandTotal].map((amt, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setQuickPaid(amt)}
-                    className={`cursor-pointer py-1.5 rounded-lg text-[11px] font-bold border transition-all active:scale-95 ${
-                      cashPaid === amt
-                        ? 'bg-amber-500 text-slate-950 border-amber-400'
-                        : isDark
-                        ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    {idx === 3 ? 'Pas' : `Rp ${amt / 1000}k`}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Cash Input */}
-            <div className="flex gap-2">
-              <input
-                type="number"
-                value={cashPaid}
-                onChange={(e) => setCashPaid(e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="Jumlah Bayar Tunai (Rp)..."
-                className={`flex-1 px-3 py-2 rounded-xl text-xs font-bold border outline-none transition-all ${
-                  isDark
-                    ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-amber-500'
-                    : 'bg-white border-slate-200 text-slate-900 focus:border-amber-500'
-                }`}
-              />
-              <div className={`flex items-center px-3 py-2 rounded-xl text-xs font-extrabold border transition-all ${
-                isDark
-                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
-                  : 'bg-emerald-50 border-emerald-300 text-emerald-700'
-              }`}>
-                Kembali: Rp {changeAmount.toLocaleString('id-ID')}
-              </div>
-            </div>
-
-            {/* Checkout Button (F9) */}
-            <button
-              onClick={handleCheckout}
-              disabled={activeCartItems.length === 0}
-              className="cursor-pointer w-full py-3 rounded-xl font-black text-sm bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 hover:from-amber-400 hover:to-yellow-400 active:scale-98 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              <Receipt className="w-5 h-5" />
-              <span>Bayar & Simpan (F9)</span>
-            </button>
           </div>
         </div>
       </div>
 
-      {/* ALL MODALS INTEGRATED */}
+      {/* MODALS */}
       <LoginModal
         isOpen={isLoginOpen}
         onClose={currentUser ? () => setIsLoginOpen(false) : undefined}
@@ -1042,7 +676,6 @@ export default function POSClient() {
         currentUser={currentUser}
         onLogout={handleLogout}
       />
-
       <MemberValidationModal
         isOpen={isMemberModalOpen}
         isDark={isDark}
@@ -1050,7 +683,6 @@ export default function POSClient() {
         onClose={() => setIsMemberModalOpen(false)}
         onSelectCustomer={(cust) => setSelectedCustomer(cust)}
       />
-
       <ItemMemoModal
         isOpen={!!memoItem}
         isDark={isDark}
@@ -1058,7 +690,6 @@ export default function POSClient() {
         onClose={() => setMemoItem(null)}
         onSaveMemo={handleSaveMemo}
       />
-
       <VoidReasonModal
         isOpen={!!voidItem}
         isDark={isDark}
@@ -1066,7 +697,6 @@ export default function POSClient() {
         onClose={() => setVoidItem(null)}
         onConfirmVoid={handleConfirmVoid}
       />
-
       <CashierSummaryModal
         isOpen={isSummaryModalOpen}
         isDark={isDark}
@@ -1076,7 +706,6 @@ export default function POSClient() {
         isConnected={isConnected}
         onPrintText={printText}
       />
-
       <SettingsModal
         isOpen={isSettingsModalOpen}
         isDark={isDark}
@@ -1087,7 +716,6 @@ export default function POSClient() {
         onConnectPrinter={connectPrinter}
         onDisconnectPrinter={disconnectPrinter}
       />
-
       <ReceiptModal
         isOpen={isReceiptOpen}
         onClose={() => setIsReceiptOpen(false)}
