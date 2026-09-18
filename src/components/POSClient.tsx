@@ -41,6 +41,7 @@ import VoidReasonModal from '@/components/VoidReasonModal';
 import MemberValidationModal from '@/components/MemberValidationModal';
 import CashierSummaryModal from '@/components/CashierSummaryModal';
 import SettingsModal from '@/components/SettingsModal';
+import { PaymentModal } from '@/components/PaymentModal';
 import { usePOSHardware } from '@/lib/usePOSHardware';
 import { useKeyboardShortcuts } from '@/lib/useKeyboardShortcuts';
 
@@ -78,7 +79,7 @@ export default function POSClient() {
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [theme, setTheme] = useState<'dark' | 'light'>('light');
   const [isGrosirMode, setIsGrosirMode] = useState(false);
 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -107,7 +108,17 @@ export default function POSClient() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cashPaid, setCashPaid] = useState<number | ''>('');
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [lastInvoiceNo, setLastInvoiceNo] = useState('');
+  const [lastReceiptData, setLastReceiptData] = useState<{
+    cart: CartItem[];
+    cashPaid: number;
+    invoiceNo: string;
+    orderType: string;
+    customer: Customer | null;
+    paymentMethod: PaymentMethod;
+    discountAmount: number;
+  } | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -143,7 +154,14 @@ export default function POSClient() {
     return () => clearTimeout(timer);
   }, [searchQuery, fetchProducts]);
 
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+
+  useEffect(() => {
+    setCurrentTime(new Date());
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Restore persistent state from localStorage on mount
   useEffect(() => {
@@ -441,12 +459,26 @@ export default function POSClient() {
     setCashPaid(amount);
   };
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (finalCashPaid: number, finalPaymentMethod: string) => {
     if (activeCartItems.length === 0) return;
+
+    setCashPaid(finalCashPaid);
+    setPaymentMethod(finalPaymentMethod as any);
+    const changeAmt = Math.max(0, finalCashPaid - grandTotal);
 
     // eslint-disable-next-line react-hooks/purity
     const invNo = `INV-${Date.now().toString().slice(-6)}`;
     setLastInvoiceNo(invNo);
+
+    setLastReceiptData({
+      cart: [...cart],
+      cashPaid: finalCashPaid,
+      invoiceNo: invNo,
+      orderType: isGrosirMode ? 'Grosir' : 'Retail',
+      customer: selectedCustomer,
+      paymentMethod: finalPaymentMethod as any,
+      discountAmount: totalDiscount,
+    });
 
     try {
       await fetch('/api/transactions', {
@@ -462,9 +494,9 @@ export default function POSClient() {
           taxAmount,
           serviceCharge: serviceAmount,
           total: grandTotal,
-          paymentMethod,
-          cashPaid: numPaid,
-          change: changeAmount,
+          paymentMethod: finalPaymentMethod,
+          cashPaid: finalCashPaid,
+          change: changeAmt,
           isGrosirMode,
           items: cart,
         }),
@@ -474,6 +506,7 @@ export default function POSClient() {
       console.error('Failed to post transaction to PostgreSQL:', e);
     }
 
+    setIsPaymentModalOpen(false);
     setIsReceiptOpen(true);
   };
 
@@ -548,9 +581,9 @@ export default function POSClient() {
           </div>
         </div>
         <div className="flex items-center gap-6 text-slate-500">
-          <span>{new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-          <span>{new Date().toLocaleTimeString('id-ID')}</span>
-          <button className="cursor-pointer flex items-center gap-1 text-rose-500 hover:text-rose-600 transition-colors">
+          <span>{currentTime ? currentTime.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '...'}</span>
+          <span>{currentTime ? currentTime.toLocaleTimeString('id-ID') : '...'}</span>
+          <button onClick={handleLogout} className="cursor-pointer flex items-center gap-1 text-rose-500 hover:text-rose-600 transition-colors">
             <span className="font-bold">X</span> Keluar
           </button>
         </div>
@@ -647,12 +680,17 @@ export default function POSClient() {
               <span className="text-[10px]">Go to Settings to activate Windows.</span>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <button className={`cursor-pointer flex-1 py-3 rounded text-sm font-semibold border flex justify-center items-center gap-2 shadow-sm transition-colors ${isDark ? 'bg-slate-700 hover:bg-slate-600 text-slate-200 border-slate-600' : 'bg-[#e5e7eb] hover:bg-[#d1d5db] text-slate-800 border-slate-400'}`}>
+              <button 
+                onClick={() => {
+                  if (lastReceiptData) setIsReceiptOpen(true);
+                  else alert('Belum ada transaksi sebelumnya untuk dicetak ulang.');
+                }}
+                className={`cursor-pointer flex-1 py-3 rounded text-sm font-semibold border flex justify-center items-center gap-2 shadow-sm transition-colors ${isDark ? 'bg-slate-700 hover:bg-slate-600 text-slate-200 border-slate-600' : 'bg-[#e5e7eb] hover:bg-[#d1d5db] text-slate-800 border-slate-400'}`}>
                 <FileText className="w-4 h-4" />
                 Reprint Bill
               </button>
               <button 
-                onClick={handleCheckout}
+                onClick={() => setIsPaymentModalOpen(true)}
                 disabled={activeCartItems.length === 0}
                 className="cursor-pointer flex-1 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white py-3 rounded text-sm font-semibold border border-emerald-600 flex justify-center items-center gap-2 shadow-sm transition-colors"
               >
@@ -716,17 +754,30 @@ export default function POSClient() {
         onConnectPrinter={connectPrinter}
         onDisconnectPrinter={disconnectPrinter}
       />
+      <PaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        totalAmount={grandTotal}
+        onSubmit={handleCheckout}
+        isDark={isDark}
+      />
       <ReceiptModal
         isOpen={isReceiptOpen}
-        onClose={() => setIsReceiptOpen(false)}
-        cart={cart}
+        onClose={() => {
+          setIsReceiptOpen(false);
+          setCart([]);
+          setCashPaid('');
+          setSelectedCustomer(null);
+          setVoucherCode('');
+        }}
+        cart={lastReceiptData?.cart || cart}
         cashierName={currentUser?.name || 'Kasir'}
-        cashPaid={numPaid}
-        invoiceNo={lastInvoiceNo || 'DRAFT'}
-        orderType={isGrosirMode ? 'Grosir' : 'Retail'}
-        customer={selectedCustomer}
-        paymentMethod={paymentMethod}
-        discountAmount={totalDiscount}
+        cashPaid={lastReceiptData?.cashPaid ?? numPaid}
+        invoiceNo={lastReceiptData?.invoiceNo || lastInvoiceNo || 'DRAFT'}
+        orderType={lastReceiptData?.orderType || (isGrosirMode ? 'Grosir' : 'Retail')}
+        customer={lastReceiptData ? lastReceiptData.customer : selectedCustomer}
+        paymentMethod={lastReceiptData?.paymentMethod || paymentMethod}
+        discountAmount={lastReceiptData ? lastReceiptData.discountAmount : totalDiscount}
         isConnected={isConnected}
         onPrintText={printText}
       />
