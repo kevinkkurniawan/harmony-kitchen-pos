@@ -5,7 +5,7 @@ interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   totalAmount: number;
-  onSubmit: (cashPaid: number, paymentMethod: string) => void;
+  onSubmit: (cashPaid: number, paymentMethod: string) => Promise<void> | void;
   isDark: boolean;
 }
 
@@ -23,6 +23,7 @@ export function PaymentModal({
   const [cashInputValue, setCashInputValue] = useState<string>('');
   const [cardNo, setCardNo] = useState<string>('');
   const [viewState, setViewState] = useState<ViewState>('INPUT');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -31,6 +32,7 @@ export function PaymentModal({
       setCashInputValue('');
       setCardNo('');
       setViewState('INPUT');
+      setIsSubmitting(false);
     }
   }, [isOpen]);
 
@@ -57,15 +59,20 @@ export function PaymentModal({
     setViewState('SUCCESS');
   };
 
-  const handleFinish = () => {
-    onSubmit(method === 'CASH' ? numCash : totalAmount, method);
+  const handleFinish = async () => {
+    setIsSubmitting(true);
+    try {
+      await onSubmit(method === 'CASH' ? numCash : totalAmount, method);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const renderInputView = () => (
     <>
       <div className={`p-4 border-b flex justify-between items-center ${borderLight}`}>
         <h2 className={`text-xl font-bold ${textPrimary}`}>Pembayaran</h2>
-        <button onClick={onClose} className={`hover:bg-slate-200 p-1 rounded-full ${isDark ? 'hover:bg-slate-700' : ''}`}>
+        <button onClick={onClose} className={`cursor-pointer hover:bg-slate-200 p-1 rounded-full ${isDark ? 'hover:bg-slate-700' : ''}`}>
           <X className="w-6 h-6" />
         </button>
       </div>
@@ -81,7 +88,7 @@ export function PaymentModal({
         <div className="grid grid-cols-3 gap-3">
           <button
             onClick={() => setMethod('CASH')}
-            className={`py-3 rounded-lg border-2 font-bold flex flex-col items-center gap-2 transition-all ${
+            className={`cursor-pointer py-3 rounded-lg border-2 font-bold flex flex-col items-center gap-2 transition-all ${
               method === 'CASH' 
                 ? 'border-emerald-500 bg-emerald-500/10 text-emerald-500' 
                 : `${borderLight} ${textSecondary} hover:border-slate-400`
@@ -92,7 +99,7 @@ export function PaymentModal({
           </button>
           <button
             onClick={() => setMethod('DEBIT')}
-            className={`py-3 rounded-lg border-2 font-bold flex flex-col items-center gap-2 transition-all ${
+            className={`cursor-pointer py-3 rounded-lg border-2 font-bold flex flex-col items-center gap-2 transition-all ${
               method === 'DEBIT' 
                 ? 'border-blue-500 bg-blue-500/10 text-blue-500' 
                 : `${borderLight} ${textSecondary} hover:border-slate-400`
@@ -103,7 +110,7 @@ export function PaymentModal({
           </button>
           <button
             onClick={() => setMethod('ACCOUNT')}
-            className={`py-3 rounded-lg border-2 font-bold flex flex-col items-center gap-2 transition-all ${
+            className={`cursor-pointer py-3 rounded-lg border-2 font-bold flex flex-col items-center gap-2 transition-all ${
               method === 'ACCOUNT' 
                 ? 'border-purple-500 bg-purple-500/10 text-purple-500' 
                 : `${borderLight} ${textSecondary} hover:border-slate-400`
@@ -131,19 +138,19 @@ export function PaymentModal({
             <div className="grid grid-cols-3 gap-2">
               <button 
                 onClick={() => setCashInputValue(totalAmount.toString())}
-                className={`py-2 rounded font-semibold border ${borderLight} ${isDark ? 'bg-slate-800 hover:bg-slate-700' : 'bg-slate-100 hover:bg-slate-200'}`}
+                className={`cursor-pointer py-2 rounded font-semibold border ${borderLight} ${isDark ? 'bg-slate-800 hover:bg-slate-700' : 'bg-slate-100 hover:bg-slate-200'}`}
               >
                 Uang Pas
               </button>
               <button 
                 onClick={() => setCashInputValue('50000')}
-                className={`py-2 rounded font-semibold border ${borderLight} ${isDark ? 'bg-slate-800 hover:bg-slate-700' : 'bg-slate-100 hover:bg-slate-200'}`}
+                className={`cursor-pointer py-2 rounded font-semibold border ${borderLight} ${isDark ? 'bg-slate-800 hover:bg-slate-700' : 'bg-slate-100 hover:bg-slate-200'}`}
               >
                 50.000
               </button>
               <button 
                 onClick={() => setCashInputValue('100000')}
-                className={`py-2 rounded font-semibold border ${borderLight} ${isDark ? 'bg-slate-800 hover:bg-slate-700' : 'bg-slate-100 hover:bg-slate-200'}`}
+                className={`cursor-pointer py-2 rounded font-semibold border ${borderLight} ${isDark ? 'bg-slate-800 hover:bg-slate-700' : 'bg-slate-100 hover:bg-slate-200'}`}
               >
                 100.000
               </button>
@@ -173,13 +180,13 @@ export function PaymentModal({
       <div className={`p-4 border-t flex justify-end gap-3 ${borderLight}`}>
         <button 
           onClick={onClose}
-          className={`px-6 py-3 rounded-lg font-bold border transition-colors ${isDark ? 'border-slate-600 text-slate-300 hover:bg-slate-800' : 'border-slate-300 text-slate-700 hover:bg-slate-100'}`}
+          className={`cursor-pointer px-6 py-3 rounded-lg font-bold border transition-colors ${isDark ? 'border-slate-600 text-slate-300 hover:bg-slate-800' : 'border-slate-300 text-slate-700 hover:bg-slate-100'}`}
         >
           Cancel
         </button>
         <button 
           onClick={handleSubmit}
-          className={`px-8 py-3 rounded-lg font-bold text-white transition-colors flex items-center gap-2 ${
+          className={`cursor-pointer px-8 py-3 rounded-lg font-bold text-white transition-colors flex items-center gap-2 ${
             (method === 'CASH' && numCash < totalAmount)
               ? 'bg-emerald-300 cursor-not-allowed'
               : 'bg-emerald-500 hover:bg-emerald-600'
@@ -223,13 +230,13 @@ export function PaymentModal({
       <div className="flex gap-4 w-full mt-4">
         <button 
           onClick={() => setViewState('INPUT')}
-          className={`flex-1 py-3 rounded-lg font-bold border transition-colors ${isDark ? 'border-slate-600 text-slate-300 hover:bg-slate-800' : 'border-slate-300 text-slate-700 hover:bg-slate-100'}`}
+          className={`cursor-pointer flex-1 py-3 rounded-lg font-bold border transition-colors ${isDark ? 'border-slate-600 text-slate-300 hover:bg-slate-800' : 'border-slate-300 text-slate-700 hover:bg-slate-100'}`}
         >
           No
         </button>
         <button 
           onClick={confirmPayment}
-          className="flex-1 py-3 rounded-lg font-bold text-white bg-blue-500 hover:bg-blue-600 transition-colors"
+          className="cursor-pointer flex-1 py-3 rounded-lg font-bold text-white bg-blue-500 hover:bg-blue-600 transition-colors"
         >
           Yes, Submit
         </button>
@@ -259,9 +266,10 @@ export function PaymentModal({
 
       <button 
         onClick={handleFinish}
-        className="w-full mt-6 py-4 rounded-xl font-bold text-lg text-white bg-emerald-500 hover:bg-emerald-600 transition-colors shadow-lg"
+        disabled={isSubmitting}
+        className={`w-full mt-6 py-4 rounded-xl font-bold text-lg text-white bg-emerald-500 hover:bg-emerald-600 transition-colors shadow-lg flex items-center justify-center gap-2 ${isSubmitting ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}
       >
-        Finish & Cetak Struk
+        {isSubmitting ? 'Memproses...' : 'Finish & Cetak Struk'}
       </button>
     </div>
   );

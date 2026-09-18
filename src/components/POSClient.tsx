@@ -42,6 +42,7 @@ import MemberValidationModal from '@/components/MemberValidationModal';
 import CashierSummaryModal from '@/components/CashierSummaryModal';
 import SettingsModal from '@/components/SettingsModal';
 import { PaymentModal } from '@/components/PaymentModal';
+import { AlertDialog } from '@/components/AlertDialog';
 import { usePOSHardware } from '@/lib/usePOSHardware';
 import { useKeyboardShortcuts } from '@/lib/useKeyboardShortcuts';
 
@@ -109,6 +110,10 @@ export default function POSClient() {
   const [cashPaid, setCashPaid] = useState<number | ''>('');
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isAlertOpen, setIsAlertOpen] = useState(false);
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertTitle, setAlertTitle] = useState('Perhatian');
+  const [alertConfirmFn, setAlertConfirmFn] = useState<(() => void) | undefined>(undefined);
   const [lastInvoiceNo, setLastInvoiceNo] = useState('');
   const [lastReceiptData, setLastReceiptData] = useState<{
     cart: CartItem[];
@@ -511,9 +516,15 @@ export default function POSClient() {
   };
 
   const handleLogout = () => {
-    setCurrentUser(null);
-    localStorage.removeItem('hk_pos_user');
-    setIsLoginOpen(true);
+    setAlertTitle('Konfirmasi Logout');
+    setAlertMessage('Apakah Anda yakin ingin keluar dari sistem kasir?');
+    setAlertConfirmFn(() => () => {
+      setCurrentUser(null);
+      localStorage.removeItem('hk_pos_user');
+      setIsLoginOpen(true);
+      setIsAlertOpen(false);
+    });
+    setIsAlertOpen(true);
   };
 
   const [shiftSummary, setShiftSummary] = useState<ShiftSummary>({
@@ -581,6 +592,14 @@ export default function POSClient() {
           </div>
         </div>
         <div className="flex items-center gap-6 text-slate-500">
+          <button 
+            onClick={handleOpenSummaryModal}
+            className={`cursor-pointer flex items-center gap-1.5 hover:text-emerald-500 transition-colors ${isDark ? 'text-slate-300' : 'text-slate-600'}`}
+            title="Laporan / Summary Kasir (F10)"
+          >
+            <TrendingUp className="w-5 h-5" />
+            <span className="hidden sm:inline">Laporan</span>
+          </button>
           <span>{currentTime ? currentTime.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '...'}</span>
           <span>{currentTime ? currentTime.toLocaleTimeString('id-ID') : '...'}</span>
           <button onClick={handleLogout} className="cursor-pointer flex items-center gap-1 text-rose-500 hover:text-rose-600 transition-colors">
@@ -675,15 +694,17 @@ export default function POSClient() {
           </div>
 
           <div className="mt-4 flex flex-col gap-2">
-            <div className={`text-center text-xs mb-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              Activate Windows<br/>
-              <span className="text-[10px]">Go to Settings to activate Windows.</span>
-            </div>
+
             <div className="flex items-center justify-between gap-2">
               <button 
                 onClick={() => {
                   if (lastReceiptData) setIsReceiptOpen(true);
-                  else alert('Belum ada transaksi sebelumnya untuk dicetak ulang.');
+                  else {
+                    setAlertTitle('Perhatian');
+                    setAlertMessage('Belum ada transaksi sebelumnya untuk dicetak ulang.');
+                    setAlertConfirmFn(undefined);
+                    setIsAlertOpen(true);
+                  }
                 }}
                 className={`cursor-pointer flex-1 py-3 rounded text-sm font-semibold border flex justify-center items-center gap-2 shadow-sm transition-colors ${isDark ? 'bg-slate-700 hover:bg-slate-600 text-slate-200 border-slate-600' : 'bg-[#e5e7eb] hover:bg-[#d1d5db] text-slate-800 border-slate-400'}`}>
                 <FileText className="w-4 h-4" />
@@ -765,21 +786,33 @@ export default function POSClient() {
         isOpen={isReceiptOpen}
         onClose={() => {
           setIsReceiptOpen(false);
-          setCart([]);
-          setCashPaid('');
-          setSelectedCustomer(null);
+          setCart([]); 
+          setCashPaid(''); 
+          setPaymentMethod('CASH');
           setVoucherCode('');
+          setSelectedCustomer(null);
         }}
-        cart={lastReceiptData?.cart || cart}
+        cart={lastReceiptData?.cart || []}
         cashierName={currentUser?.name || 'Kasir'}
-        cashPaid={lastReceiptData?.cashPaid ?? numPaid}
-        invoiceNo={lastReceiptData?.invoiceNo || lastInvoiceNo || 'DRAFT'}
+        cashPaid={lastReceiptData?.cashPaid || 0}
+        invoiceNo={lastReceiptData?.invoiceNo || lastInvoiceNo}
+        storeInfo={posSettings}
+        isDark={isDark}
+        isReprint={!!lastReceiptData}
         orderType={lastReceiptData?.orderType || (isGrosirMode ? 'Grosir' : 'Retail')}
-        customer={lastReceiptData ? lastReceiptData.customer : selectedCustomer}
-        paymentMethod={lastReceiptData?.paymentMethod || paymentMethod}
-        discountAmount={lastReceiptData ? lastReceiptData.discountAmount : totalDiscount}
+        customer={lastReceiptData?.customer}
+        paymentMethod={lastReceiptData?.paymentMethod}
+        discountAmount={lastReceiptData?.discountAmount}
         isConnected={isConnected}
         onPrintText={printText}
+      />
+      <AlertDialog
+        isOpen={isAlertOpen}
+        onClose={() => setIsAlertOpen(false)}
+        title={alertTitle}
+        message={alertMessage}
+        onConfirm={alertConfirmFn}
+        isDark={isDark}
       />
     </div>
   );
