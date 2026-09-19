@@ -20,6 +20,8 @@ import {
   User as UserIcon,
   UserCheck,
   FileText,
+  FileLock,
+  Banknote,
   TrendingUp,
   ShieldAlert,
   SlidersHorizontal,
@@ -503,9 +505,6 @@ export default function POSClient() {
   };
 
   // --- GLOBAL BARCODE SCANNER ---
-  const barcodeBuffer = useRef<string>('');
-  const lastKeyTime = useRef<number>(0);
-
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       // Abaikan jika user sedang mengetik di dalam input field (misal search box, note, modal)
@@ -513,49 +512,22 @@ export default function POSClient() {
         return;
       }
 
-      const currentTime = Date.now();
+      // Jangan cegah shortcut sistem atau navigasi
+      if (e.ctrlKey || e.altKey || e.metaKey || e.key.length > 1) {
+        return;
+      }
       
-      if (e.key === 'Enter') {
-        if (barcodeBuffer.current.length > 2) { // Asumsi barcode lebih dari 2 karakter
-          e.preventDefault();
-          const scannedCode = barcodeBuffer.current;
-          barcodeBuffer.current = '';
-          
-          const exactMatch = products.find((p) => p.barcode.toLowerCase() === scannedCode.toLowerCase());
-          
-          if (exactMatch) {
-            addToCart(exactMatch);
-          } else {
-            // Check database if not found locally
-            fetch(`/api/products/scan?barcode=${encodeURIComponent(scannedCode)}`)
-              .then(res => res.json())
-              .then(data => {
-                if (data.success && data.data) {
-                  addToCart(data.data);
-                } else {
-                  playBeep('error');
-                }
-              })
-              .catch(err => {
-                console.error('Barcode scan lookup failed:', err);
-                playBeep('error');
-              });
-          }
-        }
-      } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) { 
-        // Scanner mengetik sangat cepat (biasanya < 30ms antar karakter)
-        if (currentTime - lastKeyTime.current > 50) {
-          barcodeBuffer.current = e.key; // Reset jika lebih dari 50ms (berarti ketikan jari manusia)
-        } else {
-          barcodeBuffer.current += e.key; // Tambah karakter ke buffer scanner
-        }
-        lastKeyTime.current = currentTime;
+      // Jika scanner mulai mengetik, segera fokus ke search box dan tambahkan karakternya
+      if (document.activeElement !== searchInputRef.current) {
+        e.preventDefault();
+        setSearchQuery(prev => prev + e.key);
+        searchInputRef.current?.focus();
       }
     };
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [products, addToCart, playBeep]);
+  }, []);
 
   const activeCartItems = cart.filter((item) => !item.isVoided);
   const rawSubtotal = activeCartItems.reduce((sum, item) => sum + item.selectedPrice * item.quantity, 0);
@@ -826,10 +798,20 @@ export default function POSClient() {
                 </tr>
               </thead>
               <tbody>
-                <tr className={`${isDark ? 'bg-[#262626] border-slate-700 text-slate-500' : 'bg-[#f0f0f0] border-slate-300 text-slate-400'} border-b italic text-center`}>
-                  <td colSpan={6} className="px-4 py-1.5 text-[11px]">Click here to add a new row</td>
-                </tr>
-                {activeCartItems.map((item, idx) => {
+                {activeCartItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-24 text-center">
+                      <div className="flex flex-col items-center justify-center text-slate-400">
+                        <div className={`p-4 rounded-full mb-3 ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                          <ShoppingCart className="w-8 h-8 opacity-50" />
+                        </div>
+                        <p className="text-sm font-medium text-slate-500">Belum ada barang di keranjang</p>
+                        <p className="text-xs text-slate-400 mt-1">Scan barcode atau gunakan kotak pencarian di atas</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  activeCartItems.map((item, idx) => {
                   const originalIdx = cart.indexOf(item);
                   return (
                     <tr key={idx} className={`border-b ${isDark ? 'border-slate-700' : 'border-slate-200'} ${idx % 2 === 0 ? (isDark ? 'bg-[#1e1e1e]' : 'bg-white') : (isDark ? 'bg-[#1a1a1a]' : 'bg-slate-50')}`}>
@@ -849,7 +831,8 @@ export default function POSClient() {
                       </td>
                     </tr>
                   );
-                })}
+                })
+              )}
               </tbody>
             </table>
           </div>
@@ -899,15 +882,15 @@ export default function POSClient() {
                   }
                 }}
                 className={`cursor-pointer flex-1 py-3 rounded text-sm font-semibold border flex justify-center items-center gap-2 shadow-sm transition-colors ${isDark ? 'bg-slate-700 hover:bg-slate-600 text-slate-200 border-slate-600' : 'bg-[#e5e7eb] hover:bg-[#d1d5db] text-slate-800 border-slate-400'}`}>
-                <FileText className="w-4 h-4" />
+                <FileLock className="w-4 h-4 text-amber-500" />
                 Reprint Bill
               </button>
               <button 
                 onClick={() => setIsPaymentModalOpen(true)}
                 disabled={activeCartItems.length === 0}
-                className="cursor-pointer flex-1 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white py-3 rounded text-sm font-semibold border border-emerald-600 flex justify-center items-center gap-2 shadow-sm transition-colors"
+                className={`cursor-pointer flex-1 py-3 rounded text-sm font-semibold border flex justify-center items-center gap-2 shadow-sm transition-colors ${isDark ? 'bg-slate-700 hover:bg-slate-600 text-slate-200 border-slate-600' : 'bg-[#e5e7eb] hover:bg-[#d1d5db] text-slate-800 border-slate-400'} disabled:opacity-50`}
               >
-                <CreditCard className="w-4 h-4" />
+                <Banknote className="w-4 h-4 text-emerald-500" />
                 Payment
               </button>
             </div>
