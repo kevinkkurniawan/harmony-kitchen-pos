@@ -10,7 +10,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: false, error: 'Barcode is required' }, { status: 400 });
     }
 
-    const inventory = await prisma.inventory.findFirst({
+    let inventory = await prisma.inventory.findFirst({
       where: { 
         OR: [
           { barcode: barcode },
@@ -21,6 +21,27 @@ export async function GET(request: Request) {
         m_uom: true,
       }
     });
+
+    // If not found and barcode is numeric, try matching while ignoring leading zeroes
+    if (!inventory && barcode.match(/^[0-9]+$/)) {
+      const strippedInput = barcode.replace(/^0+/, '');
+      if (strippedInput.length > 0) {
+        const candidates = await prisma.inventory.findMany({
+          where: {
+            OR: [
+              { barcode: { endsWith: strippedInput } },
+              { inventoryno: { endsWith: strippedInput } }
+            ]
+          },
+          include: { m_uom: true }
+        });
+
+        inventory = candidates.find(c => 
+          (c.barcode && c.barcode.replace(/^0+/, '') === strippedInput) || 
+          (c.inventoryno && c.inventoryno.replace(/^0+/, '') === strippedInput)
+        ) || null;
+      }
+    }
 
     if (!inventory) {
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
