@@ -303,7 +303,7 @@ export default function POSClient() {
     'F2': (e) => searchInputRef.current?.focus(),
     'F4': (e) => handleToggleGrosir(),
     'F8': (e) => setIsMemberModalOpen(true),
-    'F9': (e) => { if (cart.length > 0) handleCheckout(); },
+    'F9': (e) => { if (cart.length > 0) setIsPaymentModalOpen(true); },
     'F10': (e) => handleOpenSummaryModal(),
     'Escape': (e) => {
       setIsMemberModalOpen(false);
@@ -680,7 +680,8 @@ export default function POSClient() {
     serviceCollected: 0,
     paymentBreakdown: {
       cash: 0,
-      edc: 0,
+      edcBca: 0,
+      edcMandiri: 0,
       transfer: 0,
       qris: 0,
       shopee: 0,

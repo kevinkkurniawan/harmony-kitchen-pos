@@ -18,6 +18,9 @@ interface ReceiptModalProps {
   notes?: string;
   isConnected?: boolean;
   onPrintText?: (text: string) => void;
+  isDark?: boolean;
+  isReprint?: boolean;
+  storeInfo?: any;
 }
 
 export default function ReceiptModal({

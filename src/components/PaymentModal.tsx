@@ -213,18 +213,18 @@ export function PaymentModal({
           </div>
         )}
 
-        {(method === 'DEBIT' || method === 'ACCOUNT') && (
+        {(method === 'EDC BCA' || method === 'EDC MANDIRI' || method === 'TRANSFER') && (
           <div className="flex flex-col gap-4">
             <div>
               <label className={`block text-sm font-medium mb-2 ${textSecondary}`}>
-                {method === 'DEBIT' ? 'Nomor Kartu Debit' : 'Referensi Account'}
+                {method === 'TRANSFER' ? 'Referensi Transfer' : 'Nomor Kartu / Referensi EDC'}
               </label>
               <input 
                 type="text"
                 value={cardNo}
                 onChange={(e) => setCardNo(e.target.value)}
                 className={`w-full p-4 rounded-lg border text-lg font-mono focus:ring-2 focus:ring-blue-500 outline-none ${bgInput}`}
-                placeholder={method === 'DEBIT' ? 'XXXX-XXXX-XXXX-XXXX' : 'Referensi'}
+                placeholder={method === 'TRANSFER' ? 'Nomor Referensi' : 'XXXX-XXXX-XXXX-XXXX'}
                 autoFocus
               />
             </div>

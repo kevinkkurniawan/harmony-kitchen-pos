@@ -53,8 +53,9 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, props: { params: Promise<{ id: string }> }) {
   try {
+    const params = await props.params;
     const transactionId = Number(params.id);
     const body = await request.json();
     const { cashierName, product, quantity, selectedPrice } = body;

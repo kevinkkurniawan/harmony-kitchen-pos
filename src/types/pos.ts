@@ -68,7 +68,8 @@ export interface ShiftSummary {
   serviceCollected: number;
   paymentBreakdown: {
     cash: number;
-    edc: number;
+    edcBca: number;
+    edcMandiri: number;
     transfer: number;
     qris: number;
     shopee: number;
