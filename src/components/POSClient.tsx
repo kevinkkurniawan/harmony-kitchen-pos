@@ -25,6 +25,7 @@ import {
   TrendingUp,
   ShieldAlert,
   SlidersHorizontal,
+  Loader2,
   DollarSign,
   QrCode,
   Sparkles,
@@ -133,6 +134,7 @@ export default function POSClient() {
   } | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [isScanning, setIsScanning] = useState(false);
 
   const { isConnected, connectPrinter, disconnectPrinter, printText, playBeep } = usePOSHardware();
 
@@ -280,6 +282,7 @@ export default function POSClient() {
         setSearchQuery('');
       } else {
         // Check database if not found locally
+        setIsScanning(true);
         fetch(`/api/products/scan?barcode=${encodeURIComponent(searchQuery.trim())}`)
           .then(res => res.json())
           .then(data => {
@@ -293,6 +296,9 @@ export default function POSClient() {
           .catch(err => {
             console.error('Search barcode lookup failed:', err);
             playBeep('error');
+          })
+          .finally(() => {
+            setIsScanning(false);
           });
       }
     }
@@ -771,14 +777,22 @@ export default function POSClient() {
                   className={`w-12 border rounded px-2 py-1 text-sm text-center outline-none ${isDark ? 'bg-slate-800 border-slate-600 text-slate-200' : 'bg-white border-slate-300 text-slate-800'}`} 
                 />
                 <span className="text-sm font-semibold text-slate-400 ml-4">Barcode :</span>
-                <input 
-                  ref={searchInputRef}
-                  type="text" 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={handleSearchKeyDown}
-                  className={`w-80 border rounded px-3 py-1.5 text-sm outline-none transition-colors ${isDark ? 'bg-amber-900/20 border-amber-500/50 focus:bg-slate-800 text-slate-200' : 'bg-yellow-50 border-yellow-200 focus:bg-white focus:border-amber-500 text-slate-900'}`} 
-                />
+                <div className="relative">
+                  <input 
+                    ref={searchInputRef}
+                    type="text" 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={handleSearchKeyDown}
+                    disabled={isScanning}
+                    className={`w-80 border rounded px-3 py-1.5 text-sm outline-none transition-colors ${isDark ? 'bg-amber-900/20 border-amber-500/50 focus:bg-slate-800 text-slate-200' : 'bg-yellow-50 border-yellow-200 focus:bg-white focus:border-amber-500 text-slate-900'} ${isScanning ? 'opacity-70' : ''}`} 
+                  />
+                  {isScanning && (
+                    <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                      <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <div className={`text-[3.5rem] leading-none font-medium tabular-nums tracking-tighter ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
