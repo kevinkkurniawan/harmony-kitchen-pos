@@ -32,7 +32,7 @@ export interface Customer {
   discountPercent: number;
 }
 
-export type PaymentMethod = 'CASH' | 'EDC' | 'TRANSFER' | 'QRIS' | 'SHOPEE' | 'TOKOPEDIA';
+export type PaymentMethod = 'CASH' | 'EDC BCA' | 'EDC MANDIRI' | 'TRANSFER' | 'QRIS' | 'SHOPEE' | 'TOKOPEDIA';
 
 export interface Transaction {
   id: string;

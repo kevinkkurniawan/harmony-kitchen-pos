@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, CheckCircle, CreditCard, Banknote, HelpCircle, Save } from 'lucide-react';
+import { X, CheckCircle, CreditCard, Banknote, HelpCircle, Save, Smartphone, QrCode, ShoppingBag, Truck } from 'lucide-react';
+import { PaymentMethod } from '@/types/pos';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -9,7 +10,6 @@ interface PaymentModalProps {
   isDark: boolean;
 }
 
-type PaymentMethod = 'CASH' | 'DEBIT' | 'ACCOUNT';
 type ViewState = 'INPUT' | 'CONFIRM' | 'SUCCESS';
 
 export function PaymentModal({
@@ -98,28 +98,83 @@ export function PaymentModal({
             CASH
           </button>
           <button
-            onClick={() => setMethod('DEBIT')}
+            onClick={() => setMethod('EDC BCA')}
             className={`cursor-pointer py-3 rounded-lg border-2 font-bold flex flex-col items-center gap-2 transition-all ${
-              method === 'DEBIT' 
+              method === 'EDC BCA' 
                 ? 'border-blue-500 bg-blue-500/10 text-blue-500' 
                 : `${borderLight} ${textSecondary} hover:border-slate-400`
             }`}
           >
             <CreditCard className="w-6 h-6" />
-            DEBIT
+            EDC BCA
           </button>
           <button
-            onClick={() => setMethod('ACCOUNT')}
+            onClick={() => setMethod('EDC MANDIRI')}
             className={`cursor-pointer py-3 rounded-lg border-2 font-bold flex flex-col items-center gap-2 transition-all ${
-              method === 'ACCOUNT' 
+              method === 'EDC MANDIRI' 
+                ? 'border-cyan-500 bg-cyan-500/10 text-cyan-500' 
+                : `${borderLight} ${textSecondary} hover:border-slate-400`
+            }`}
+          >
+            <CreditCard className="w-6 h-6" />
+            EDC MANDIRI
+          </button>
+          <button
+            onClick={() => setMethod('TRANSFER')}
+            className={`cursor-pointer py-3 rounded-lg border-2 font-bold flex flex-col items-center gap-2 transition-all ${
+              method === 'TRANSFER' 
                 ? 'border-purple-500 bg-purple-500/10 text-purple-500' 
                 : `${borderLight} ${textSecondary} hover:border-slate-400`
             }`}
           >
-            <HelpCircle className="w-6 h-6" />
-            ACCOUNT
+            <Smartphone className="w-6 h-6" />
+            TRANSFER
+          </button>
+          <button
+            onClick={() => setMethod('QRIS')}
+            className={`cursor-pointer py-3 rounded-lg border-2 font-bold flex flex-col items-center gap-2 transition-all ${
+              method === 'QRIS' 
+                ? 'border-amber-500 bg-amber-500/10 text-amber-500' 
+                : `${borderLight} ${textSecondary} hover:border-slate-400`
+            }`}
+          >
+            <QrCode className="w-6 h-6" />
+            QRIS
+          </button>
+          <button
+            onClick={() => setMethod('SHOPEE')}
+            className={`cursor-pointer py-3 rounded-lg border-2 font-bold flex flex-col items-center gap-2 transition-all ${
+              method === 'SHOPEE' 
+                ? 'border-orange-500 bg-orange-500/10 text-orange-500' 
+                : `${borderLight} ${textSecondary} hover:border-slate-400`
+            }`}
+          >
+            <ShoppingBag className="w-6 h-6" />
+            SHOPEE
+          </button>
+          <button
+            onClick={() => setMethod('TOKOPEDIA')}
+            className={`cursor-pointer py-3 rounded-lg border-2 font-bold flex flex-col items-center gap-2 transition-all ${
+              method === 'TOKOPEDIA' 
+                ? 'border-green-600 bg-green-600/10 text-green-600' 
+                : `${borderLight} ${textSecondary} hover:border-slate-400`
+            }`}
+          >
+            <ShoppingBag className="w-6 h-6" />
+            TOKOPEDIA
           </button>
         </div>
+
+        {method !== 'CASH' && (
+          <div className="flex flex-col gap-4">
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${textSecondary}`}>Nominal (Sesuai Tagihan)</label>
+              <div className={`w-full p-4 rounded-lg border text-2xl font-bold font-mono outline-none ${bgInput} opacity-80 cursor-not-allowed`}>
+                Rp {totalAmount.toLocaleString('id-ID')}
+              </div>
+            </div>
+          </div>
+        )}
 
         {method === 'CASH' && (
           <div className="flex flex-col gap-4">

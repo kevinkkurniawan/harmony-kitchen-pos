@@ -77,6 +77,7 @@ export default function POSClient() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [scanQty, setScanQty] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -115,6 +116,10 @@ export default function POSClient() {
   const [alertTitle, setAlertTitle] = useState('Perhatian');
   const [alertConfirmFn, setAlertConfirmFn] = useState<(() => void) | undefined>(undefined);
   const [lastInvoiceNo, setLastInvoiceNo] = useState('');
+  
+  const activeTransactionIdRef = useRef<number | null>(null);
+  const [activeTransactionNo, setActiveTransactionNo] = useState<string | null>(null);
+
   const [lastReceiptData, setLastReceiptData] = useState<{
     cart: CartItem[];
     cashPaid: number;
@@ -191,6 +196,13 @@ export default function POSClient() {
       const savedCustomer = localStorage.getItem('hk_pos_customer');
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (savedCustomer) setSelectedCustomer(JSON.parse(savedCustomer));
+
+      const savedTransactionId = localStorage.getItem('hk_pos_transaction_id');
+      if (savedTransactionId) activeTransactionIdRef.current = Number(savedTransactionId);
+
+      const savedTransactionNo = localStorage.getItem('hk_pos_transaction_no');
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (savedTransactionNo) setActiveTransactionNo(savedTransactionNo);
     } catch (e) {
       console.error('Failed to restore POS state from localStorage:', e);
     } finally {
@@ -231,6 +243,22 @@ export default function POSClient() {
     }
   }, [selectedCustomer, isInitialized]);
 
+  // Sync active transaction to localStorage
+  useEffect(() => {
+    if (!isInitialized) return;
+    if (activeTransactionIdRef.current) {
+      localStorage.setItem('hk_pos_transaction_id', activeTransactionIdRef.current.toString());
+    } else {
+      localStorage.removeItem('hk_pos_transaction_id');
+    }
+    
+    if (activeTransactionNo) {
+      localStorage.setItem('hk_pos_transaction_no', activeTransactionNo);
+    } else {
+      localStorage.removeItem('hk_pos_transaction_no');
+    }
+  }, [activeTransactionNo, isInitialized]);
+
   // Auto focus search input on mount for barcode scanner readiness
   useEffect(() => {
     searchInputRef.current?.focus();
@@ -249,7 +277,21 @@ export default function POSClient() {
         addToCart(exactMatch);
         setSearchQuery('');
       } else {
-        playBeep('error');
+        // Check database if not found locally
+        fetch(`/api/products/scan?barcode=${encodeURIComponent(searchQuery.trim())}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.success && data.data) {
+              addToCart(data.data);
+              setSearchQuery('');
+            } else {
+              playBeep('error');
+            }
+          })
+          .catch(err => {
+            console.error('Search barcode lookup failed:', err);
+            playBeep('error');
+          });
       }
     }
   };
@@ -303,65 +345,16 @@ export default function POSClient() {
 
   const addToCart = useCallback((product: Product) => {
     playBeep('success');
+
     setCart((prevCart) => {
       const existingIndex = prevCart.findIndex((i) => i.product.id === product.id && !i.isVoided);
       let selectedPrice = product.priceRetail;
       let priceType: CartItem['priceType'] = 'retail';
 
+      let newQty = scanQty;
       if (existingIndex > -1) {
-        const updated = [...prevCart];
-        const newQty = updated[existingIndex].quantity + 1;
-
-        if (isGrosirMode) {
-          if (newQty >= 60) {
-            selectedPrice = product.priceGrosir3;
-            priceType = 'grosir3';
-          } else if (newQty >= 12) {
-            selectedPrice = product.priceGrosir2;
-            priceType = 'grosir2';
-          } else {
-            selectedPrice = product.priceGrosir1;
-            priceType = 'grosir1';
-          }
-        }
-
-        updated[existingIndex] = {
-          ...updated[existingIndex],
-          quantity: newQty,
-          selectedPrice,
-          priceType,
-        };
-        return updated;
-      } else {
-        if (isGrosirMode) {
-          selectedPrice = product.priceGrosir1;
-          priceType = 'grosir1';
-        }
-        return [
-          ...prevCart,
-          {
-            product,
-            quantity: 1,
-            selectedPrice,
-            priceType,
-          },
-        ];
+        newQty = prevCart[existingIndex].quantity + scanQty;
       }
-    });
-  }, [isGrosirMode, playBeep]);
-
-  const updateQty = (index: number, delta: number) => {
-    setCart((prevCart) => {
-      const updated = [...prevCart];
-      const newQty = updated[index].quantity + delta;
-
-      if (newQty <= 0) {
-        return updated.filter((_, i) => i !== index);
-      }
-
-      const product = updated[index].product;
-      let selectedPrice = product.priceRetail;
-      let priceType: CartItem['priceType'] = 'retail';
 
       if (isGrosirMode) {
         if (newQty >= 60) {
@@ -374,6 +367,114 @@ export default function POSClient() {
           selectedPrice = product.priceGrosir1;
           priceType = 'grosir1';
         }
+      }
+
+      // Fire and forget API call for active transaction sync
+      (async () => {
+        try {
+          if (!activeTransactionIdRef.current) {
+            const res = await fetch('/api/transactions/active', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                cashierName: currentUser?.name || 'Kasir',
+                isGrosirMode,
+                customerId: selectedCustomer?.id || null,
+                product,
+                quantity: scanQty,
+                selectedPrice,
+              })
+            });
+            const json = await res.json();
+            if (json.success && json.data) {
+              activeTransactionIdRef.current = json.data.id;
+              setActiveTransactionNo(json.data.salesposno);
+            }
+          } else {
+            await fetch(`/api/transactions/active/${activeTransactionIdRef.current}/items`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                cashierName: currentUser?.name || 'Kasir',
+                product,
+                quantity: scanQty,
+                selectedPrice,
+              })
+            });
+          }
+        } catch (e) {
+          console.error('Failed to sync active transaction', e);
+        }
+      })();
+
+      if (existingIndex > -1) {
+        const updated = [...prevCart];
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          quantity: newQty,
+          selectedPrice,
+          priceType,
+        };
+        return updated;
+      } else {
+        return [
+          ...prevCart,
+          {
+            product,
+            quantity: scanQty,
+            selectedPrice,
+            priceType,
+          },
+        ];
+      }
+    });
+    setScanQty(1); // Reset to 1 after adding to cart
+  }, [isGrosirMode, playBeep, scanQty, currentUser, selectedCustomer]);
+
+  const updateQty = (index: number, delta: number) => {
+    setCart((prevCart) => {
+      const updated = [...prevCart];
+      const newQty = updated[index].quantity + delta;
+      const product = updated[index].product;
+
+      let selectedPrice = product.priceRetail;
+      let priceType: CartItem['priceType'] = 'retail';
+
+      if (newQty > 0 && isGrosirMode) {
+        if (newQty >= 60) {
+          selectedPrice = product.priceGrosir3;
+          priceType = 'grosir3';
+        } else if (newQty >= 12) {
+          selectedPrice = product.priceGrosir2;
+          priceType = 'grosir2';
+        } else {
+          selectedPrice = product.priceGrosir1;
+          priceType = 'grosir1';
+        }
+      }
+
+      // Sync with DB
+      if (activeTransactionIdRef.current) {
+        (async () => {
+          try {
+            await fetch(`/api/transactions/active/${activeTransactionIdRef.current}/items`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                cashierName: currentUser?.name || 'Kasir',
+                product,
+                quantity: newQty,
+                selectedPrice,
+              })
+            });
+          } catch (e) {
+            console.error('Failed to sync item update', e);
+          }
+        })();
+      }
+
+      if (newQty <= 0) {
+        return updated.filter((_, i) => i !== index);
       }
 
       updated[index] = {
@@ -425,7 +526,20 @@ export default function POSClient() {
           if (exactMatch) {
             addToCart(exactMatch);
           } else {
-            playBeep('error');
+            // Check database if not found locally
+            fetch(`/api/products/scan?barcode=${encodeURIComponent(scannedCode)}`)
+              .then(res => res.json())
+              .then(data => {
+                if (data.success && data.data) {
+                  addToCart(data.data);
+                } else {
+                  playBeep('error');
+                }
+              })
+              .catch(err => {
+                console.error('Barcode scan lookup failed:', err);
+                playBeep('error');
+              });
           }
         }
       } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) { 
@@ -471,14 +585,13 @@ export default function POSClient() {
     setPaymentMethod(finalPaymentMethod as any);
     const changeAmt = Math.max(0, finalCashPaid - grandTotal);
 
-    // eslint-disable-next-line react-hooks/purity
-    const invNo = `INV-${Date.now().toString().slice(-6)}`;
-    setLastInvoiceNo(invNo);
+    const currentInvNo = activeTransactionNo || `INV-${Date.now().toString().slice(-6)}`;
+    setLastInvoiceNo(currentInvNo);
 
     setLastReceiptData({
       cart: [...cart],
       cashPaid: finalCashPaid,
-      invoiceNo: invNo,
+      invoiceNo: currentInvNo,
       orderType: isGrosirMode ? 'Grosir' : 'Retail',
       customer: selectedCustomer,
       paymentMethod: finalPaymentMethod as any,
@@ -486,26 +599,49 @@ export default function POSClient() {
     });
 
     try {
-      await fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          invoiceNo: invNo,
-          cashierName: currentUser?.name || 'Kasir',
-          mode: isGrosirMode ? 'Grosir' : 'Retail',
-          customerId: selectedCustomer?.id || null,
-          subtotal: rawSubtotal,
-          discountAmount: totalDiscount,
-          taxAmount,
-          serviceCharge: serviceAmount,
-          total: grandTotal,
-          paymentMethod: finalPaymentMethod,
-          cashPaid: finalCashPaid,
-          change: changeAmt,
-          isGrosirMode,
-          items: cart,
-        }),
-      });
+      if (activeTransactionIdRef.current) {
+        await fetch(`/api/transactions/active/${activeTransactionIdRef.current}/checkout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cashierName: currentUser?.name || 'Kasir',
+            subtotal: rawSubtotal,
+            discountAmount: totalDiscount,
+            total: grandTotal,
+            paymentMethod: finalPaymentMethod,
+            cashPaid: finalCashPaid,
+            notes: '',
+          }),
+        });
+      } else {
+        // Fallback if no active transaction was created
+        await fetch('/api/transactions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            invoiceNo: currentInvNo,
+            cashierName: currentUser?.name || 'Kasir',
+            mode: isGrosirMode ? 'Grosir' : 'Retail',
+            customerId: selectedCustomer?.id || null,
+            subtotal: rawSubtotal,
+            discountAmount: totalDiscount,
+            taxAmount,
+            serviceCharge: serviceAmount,
+            total: grandTotal,
+            paymentMethod: finalPaymentMethod,
+            cashPaid: finalCashPaid,
+            change: changeAmt,
+            isGrosirMode,
+            items: cart,
+          }),
+        });
+      }
+      
+      // Clear active transaction
+      activeTransactionIdRef.current = null;
+      setActiveTransactionNo(null);
+      setCart([]);
+      
       fetchProducts(searchQuery);
     } catch (e) {
       console.error('Failed to post transaction to PostgreSQL:', e);
@@ -513,6 +649,39 @@ export default function POSClient() {
 
     setIsPaymentModalOpen(false);
     setIsReceiptOpen(true);
+  };
+
+  const handleClearCart = () => {
+    setAlertTitle('Batalkan Transaksi');
+    setAlertMessage('Apakah Anda yakin ingin membatalkan transaksi ini? Semua item akan dihapus.');
+    setAlertConfirmFn(() => async () => {
+      if (activeTransactionIdRef.current) {
+        try {
+          await fetch(`/api/transactions/active/${activeTransactionIdRef.current}`, {
+            method: 'DELETE',
+          });
+        } catch (e) {
+          console.error('Failed to void transaction', e);
+        }
+      }
+      activeTransactionIdRef.current = null;
+      setActiveTransactionNo(null);
+      setCart([]);
+      setIsAlertOpen(false);
+      setAlertConfirmFn(undefined);
+    });
+    setIsAlertOpen(true);
+  };
+
+  const handleConfirmRemoveItem = (item: CartItem, originalIdx: number) => {
+    setAlertTitle('Hapus Item');
+    setAlertMessage(`Apakah Anda yakin ingin menghapus ${item.product.name} dari keranjang?`);
+    setAlertConfirmFn(() => () => {
+      updateQty(originalIdx, -item.quantity);
+      setIsAlertOpen(false);
+      setAlertConfirmFn(undefined);
+    });
+    setIsAlertOpen(true);
   };
 
   const handleLogout = () => {
@@ -564,8 +733,12 @@ export default function POSClient() {
     }
   };
 
-  const handleOpenSummaryModal = () => {
-    fetchShiftSummary();
+  const [isFetchingSummary, setIsFetchingSummary] = useState(false);
+
+  const handleOpenSummaryModal = async () => {
+    setIsFetchingSummary(true);
+    await fetchShiftSummary();
+    setIsFetchingSummary(false);
     setIsSummaryModalOpen(true);
   };
 
@@ -594,11 +767,12 @@ export default function POSClient() {
         <div className="flex items-center gap-6 text-slate-500">
           <button 
             onClick={handleOpenSummaryModal}
-            className={`cursor-pointer flex items-center gap-1.5 hover:text-emerald-500 transition-colors ${isDark ? 'text-slate-300' : 'text-slate-600'}`}
+            disabled={isFetchingSummary}
+            className={`cursor-pointer flex items-center gap-1.5 hover:text-emerald-500 transition-colors disabled:opacity-50 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}
             title="Laporan / Summary Kasir (F10)"
           >
-            <TrendingUp className="w-5 h-5" />
-            <span className="hidden sm:inline">Laporan</span>
+            {isFetchingSummary ? <RefreshCw className="w-4 h-4 animate-spin" /> : <TrendingUp className="w-4 h-4" />}
+            <span className="hidden sm:inline">{isFetchingSummary ? 'Memuat...' : 'Laporan'}</span>
           </button>
           <span>{currentTime ? currentTime.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '...'}</span>
           <span>{currentTime ? currentTime.toLocaleTimeString('id-ID') : '...'}</span>
@@ -614,10 +788,15 @@ export default function POSClient() {
         <div className={`flex-1 flex flex-col min-w-0 border-r ${isDark ? 'border-slate-700 bg-[#1e1e1e]' : 'border-slate-300 bg-[#f9fafb]'}`}>
           <div className={`p-4 flex justify-between items-start border-b ${isDark ? 'border-slate-700' : 'border-slate-300'}`}>
             <div className="flex flex-col gap-4">
-              <div className="text-xs text-slate-500 font-semibold">No. Transaksi <span className="text-amber-600 ml-1">PS260905037</span></div>
+              <div className="text-xs text-slate-500 font-semibold">No. Transaksi <span className="text-amber-600 ml-1">{activeTransactionNo || 'New Transaction'}</span></div>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-slate-400">#</span>
-                <input type="number" defaultValue="1" className={`w-12 border rounded px-2 py-1 text-sm text-center outline-none ${isDark ? 'bg-slate-800 border-slate-600 text-slate-200' : 'bg-white border-slate-300 text-slate-800'}`} />
+                <input 
+                  type="number" 
+                  value={scanQty}
+                  onChange={(e) => setScanQty(Math.max(1, parseInt(e.target.value) || 1))}
+                  className={`w-12 border rounded px-2 py-1 text-sm text-center outline-none ${isDark ? 'bg-slate-800 border-slate-600 text-slate-200' : 'bg-white border-slate-300 text-slate-800'}`} 
+                />
                 <span className="text-sm font-semibold text-slate-400 ml-4">Barcode :</span>
                 <input 
                   ref={searchInputRef}
@@ -642,22 +821,35 @@ export default function POSClient() {
                   <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} text-center w-24`}>Stok</th>
                   <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} text-center w-16`}>#</th>
                   <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} text-right w-32`}>Harga @unit</th>
-                  <th className="px-4 py-2 font-semibold text-right w-32">Harga Total</th>
+                  <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} text-right w-32`}>Harga Total</th>
+                  <th className="px-4 py-2 font-semibold text-center w-12">Aksi</th>
                 </tr>
               </thead>
               <tbody>
                 <tr className={`${isDark ? 'bg-[#262626] border-slate-700 text-slate-500' : 'bg-[#f0f0f0] border-slate-300 text-slate-400'} border-b italic text-center`}>
-                  <td colSpan={5} className="px-4 py-1.5 text-[11px]">Click here to add a new row</td>
+                  <td colSpan={6} className="px-4 py-1.5 text-[11px]">Click here to add a new row</td>
                 </tr>
-                {activeCartItems.map((item, idx) => (
-                  <tr key={idx} className={`border-b ${isDark ? 'border-slate-700' : 'border-slate-200'} ${idx % 2 === 0 ? (isDark ? 'bg-[#1e1e1e]' : 'bg-white') : (isDark ? 'bg-[#1a1a1a]' : 'bg-slate-50')}`}>
-                    <td className={`px-4 py-2.5 border-r font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.product.name}</td>
-                    <td className={`px-4 py-2.5 border-r text-center font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.product.stock}</td>
-                    <td className={`px-4 py-2.5 border-r text-center font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.quantity}</td>
-                    <td className={`px-4 py-2.5 border-r text-right font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.selectedPrice.toLocaleString('id-ID')}</td>
-                    <td className={`px-4 py-2.5 text-right font-medium ${isDark ? 'text-sky-400' : 'text-sky-700'}`}>{(item.selectedPrice * item.quantity).toLocaleString('id-ID')}</td>
-                  </tr>
-                ))}
+                {activeCartItems.map((item, idx) => {
+                  const originalIdx = cart.indexOf(item);
+                  return (
+                    <tr key={idx} className={`border-b ${isDark ? 'border-slate-700' : 'border-slate-200'} ${idx % 2 === 0 ? (isDark ? 'bg-[#1e1e1e]' : 'bg-white') : (isDark ? 'bg-[#1a1a1a]' : 'bg-slate-50')}`}>
+                      <td className={`px-4 py-2.5 border-r font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.product.name}</td>
+                      <td className={`px-4 py-2.5 border-r text-center font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.product.stock}</td>
+                      <td className={`px-4 py-2.5 border-r text-center font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.quantity}</td>
+                      <td className={`px-4 py-2.5 border-r text-right font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.selectedPrice.toLocaleString('id-ID')}</td>
+                      <td className={`px-4 py-2.5 border-r text-right font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{(item.selectedPrice * item.quantity).toLocaleString('id-ID')}</td>
+                      <td className="px-4 py-2.5 text-center">
+                        <button 
+                          onClick={() => handleConfirmRemoveItem(item, originalIdx)}
+                          className={`cursor-pointer p-1.5 rounded-md hover:bg-rose-500/20 text-rose-500 transition-colors`}
+                          title="Hapus item"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -719,6 +911,15 @@ export default function POSClient() {
                 Payment
               </button>
             </div>
+
+            <button 
+              onClick={handleClearCart}
+              disabled={activeCartItems.length === 0}
+              className="mt-2 w-full cursor-pointer bg-rose-500 hover:bg-rose-600 disabled:opacity-50 text-white py-2 rounded text-sm font-semibold border border-rose-600 flex justify-center items-center gap-2 shadow-sm transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              Batal
+            </button>
           </div>
         </div>
       </div>

@@ -55,7 +55,8 @@ export default function CashierSummaryModal({
       str += '--------------------------------\n';
       
       str += BOLD_ON + 'DEBIT\n' + BOLD_OFF;
-      if (summary.paymentBreakdown.edc > 0) str += formatLine(' EDC BCA', formatMoney(summary.paymentBreakdown.edc));
+      if (summary.paymentBreakdown.edcBca > 0) str += formatLine(' EDC BCA', formatMoney(summary.paymentBreakdown.edcBca));
+      if (summary.paymentBreakdown.edcMandiri > 0) str += formatLine(' EDC MANDIRI', formatMoney(summary.paymentBreakdown.edcMandiri));
       if (summary.paymentBreakdown.transfer > 0) str += formatLine(' TRANSFER', formatMoney(summary.paymentBreakdown.transfer));
       
       str += BOLD_ON + 'KREDIT\n' + BOLD_OFF;
@@ -125,14 +126,14 @@ export default function CashierSummaryModal({
               <div className="font-bold uppercase text-blue-900">DEBIT</div>
               <div className="flex justify-between pl-2 text-blue-900">
                 <span>EDC BCA</span>
-                <span className="font-bold">{summary.paymentBreakdown.edc > 0 ? formatMoney(summary.paymentBreakdown.edc) : ''}</span>
+                <span className="font-bold">{summary.paymentBreakdown.edcBca > 0 ? formatMoney(summary.paymentBreakdown.edcBca) : ''}</span>
               </div>
               <div className="flex justify-between pl-2 text-blue-900">
-                <span>EDC Mandiri</span>
-                <span className="font-bold"></span>
+                <span>EDC MANDIRI</span>
+                <span className="font-bold">{summary.paymentBreakdown.edcMandiri > 0 ? formatMoney(summary.paymentBreakdown.edcMandiri) : ''}</span>
               </div>
               <div className="flex justify-between pl-2 text-blue-900">
-                <span>TF</span>
+                <span>TRANSFER</span>
                 <span className="font-bold">{summary.paymentBreakdown.transfer > 0 ? formatMoney(summary.paymentBreakdown.transfer) : ''}</span>
               </div>
             </div>

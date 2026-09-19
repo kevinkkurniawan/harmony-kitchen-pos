@@ -18,12 +18,18 @@ export async function GET(request: Request) {
           gte: startOfDay,
           lte: endOfDay,
         },
+        status: 'COMPLETED',
+        createduser: cashierName !== 'Kasir' ? cashierName : undefined,
       },
     });
 
     const headerIds = headers.map((h) => h.id);
     const details = await prisma.t_salesposdetail.findMany({
       where: { salesposheaderid: { in: headerIds } },
+    });
+
+    const payments = await prisma.t_salespayment.findMany({
+      where: { salesposid: { in: headerIds } },
     });
 
     let grossSales = 0;
@@ -34,7 +40,8 @@ export async function GET(request: Request) {
 
     const breakdown = {
       cash: 0,
-      edc: 0,
+      edcBca: 0,
+      edcMandiri: 0,
       transfer: 0,
       qris: 0,
       shopee: 0,
@@ -49,16 +56,23 @@ export async function GET(request: Request) {
       grossSales += grandTotal;
       netSales += grandTotal;
 
-      // Currently mapping everything to cash since there's no payment type in header
-      breakdown.cash += grandTotal;
+      const pmt = payments.find(p => p.salesposid === tx.id);
+      if (pmt) {
+        if (pmt.paymenttypeid === 1) breakdown.cash += grandTotal;
+        else if (pmt.paymenttypeid === 3) breakdown.edcBca += grandTotal;
+        else if (pmt.paymenttypeid === 8) breakdown.edcMandiri += grandTotal;
+        else if (pmt.paymenttypeid === 7) breakdown.transfer += grandTotal;
+        else if (pmt.paymenttypeid === 4) breakdown.qris += grandTotal;
+        else if (pmt.paymenttypeid === 5) breakdown.shopee += grandTotal;
+        else if (pmt.paymenttypeid === 6) breakdown.tokopedia += grandTotal;
+        else breakdown.cash += grandTotal;
+      } else {
+        breakdown.cash += grandTotal;
+      }
 
       const txDetails = details.filter((d) => d.salesposheaderid === tx.id);
       for (const item of txDetails) {
         // Void check if supported, assuming false for now
-        // if (item.isVoided) {
-        //   voidCount += 1;
-        //   voidTotalAmount += Number(item.price) * Number(item.qty);
-        // }
       }
     }
 
