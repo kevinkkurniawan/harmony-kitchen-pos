@@ -34,7 +34,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
         where: { salesposheaderid: transactionId }
       });
 
-      // 3. Decrement stock
+      // 3. Decrement stock and mark as synced
       for (const item of details) {
         await tx.inventory.update({
           where: { id: Number(item.inventoryid) },
@@ -42,6 +42,14 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
             stokupdate: { decrement: Number(item.qty) },
           },
         }).catch(e => console.log('Error updating stock', e));
+
+        await tx.t_salesposdetail.update({
+          where: { id: item.id },
+          data: {
+            issync: true,
+            syncdate: new Date(),
+          },
+        });
       }
 
       // 4. Record Payment in t_salespayment
