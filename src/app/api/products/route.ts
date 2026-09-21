@@ -16,28 +16,48 @@ export async function GET(request: Request) {
       ];
     }
 
-    const inventories = await prisma.inventory.findMany({
-      where: whereCondition,
-      orderBy: { inventoryname: 'asc' },
-      take: limit,
-      include: {
-        m_uom: true,
-      }
-    });
+    const [inventories, wholesaleCategories] = await Promise.all([
+      prisma.inventory.findMany({
+        where: whereCondition,
+        orderBy: { inventoryname: 'asc' },
+        take: limit,
+        include: {
+          m_uom: true,
+        },
+      }),
+      prisma.m_wholesalecategory.findMany(),
+    ]);
 
-    const products = inventories.map((inv) => ({
-      id: inv.id.toString(),
-      name: inv.inventoryname || 'Unknown',
-      barcode: inv.barcode || inv.inventoryno || '',
-      category: 'General', // Not mapped in new schema directly, hardcoded for now
-      uom: inv.m_uom?.uomname || 'Pcs',
-      priceRetail: Number(inv.price || 0),
-      stock: Number(inv.stokupdate || 0),
-      priceGrosir1: Number(inv.grosir1 || inv.price || 0),
-      priceGrosir2: Number(inv.grosir2 || inv.price || 0),
-      priceGrosir3: Number(inv.grosir3 || inv.price || 0),
-      printerTarget: 'Cashier'
-    }));
+    const wcMap = new Map(wholesaleCategories.map((wc) => [wc.id, wc]));
+
+    const products = inventories.map((inv) => {
+      const wc = inv.wholesalecategoryid ? wcMap.get(inv.wholesalecategoryid) : null;
+      return {
+        id: inv.id.toString(),
+        name: inv.inventoryname || 'Unknown',
+        barcode: inv.barcode || inv.inventoryno || '',
+        category: 'General',
+        uom: inv.m_uom?.uomname || 'Pcs',
+        priceRetail: Number(inv.price || 0),
+        stock: Number(inv.stokupdate || 0),
+        priceGrosir1: Number(inv.grosir1 || inv.price || 0),
+        priceGrosir2: Number(inv.grosir2 || inv.price || 0),
+        priceGrosir3: Number(inv.grosir3 || inv.price || 0),
+        wholesalecategoryid: inv.wholesalecategoryid,
+        wholesaleCategory: wc
+          ? {
+              id: wc.id,
+              code: wc.code,
+              name: wc.name,
+              version: wc.version,
+              tier1_minqty: wc.tier1_minqty,
+              tier2_minqty: wc.tier2_minqty,
+              tier3_minqty: wc.tier3_minqty,
+            }
+          : null,
+        printerTarget: 'Cashier',
+      };
+    });
 
     return NextResponse.json({
       success: true,

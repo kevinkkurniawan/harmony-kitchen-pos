@@ -4,39 +4,23 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Search,
   RefreshCw,
-  Receipt,
   ShoppingCart,
-  Plus,
-  Minus,
   Trash2,
-  CheckCircle2,
   Tag,
   Store,
   CreditCard,
-  Barcode,
-  Check,
-  Sun,
-  Moon,
-  User as UserIcon,
-  UserCheck,
   FileText,
   FileLock,
   Banknote,
   TrendingUp,
-  ShieldAlert,
   SlidersHorizontal,
   Loader2,
-  DollarSign,
-  QrCode,
   Sparkles,
-  Settings,
-  Database,
-  Repeat,
-  LogOut,
-  LogIn,
+  Zap,
+  Percent,
 } from 'lucide-react';
 import { Product, CartItem, Customer, ShiftSummary, PaymentMethod } from '@/types/pos';
-import { MOCK_POS_USERS, POSUser } from '@/types/user';
+import { POSUser } from '@/types/user';
 import ReceiptModal from '@/components/ReceiptModal';
 import LoginModal from '@/components/LoginModal';
 import ItemMemoModal from '@/components/ItemMemoModal';
@@ -48,31 +32,7 @@ import { PaymentModal } from '@/components/PaymentModal';
 import { AlertDialog } from '@/components/AlertDialog';
 import { usePOSHardware } from '@/lib/usePOSHardware';
 import { useKeyboardShortcuts } from '@/lib/useKeyboardShortcuts';
-
-function HighlightText({ text, query, isDark }: { text: string; query: string; isDark: boolean }) {
-  if (!query.trim()) return <span>{text}</span>;
-
-  const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
-
-  return (
-    <span>
-      {parts.map((part, i) =>
-        part.toLowerCase() === query.toLowerCase() ? (
-          <mark
-            key={i}
-            className={`font-bold px-1 rounded-xs ${
-              isDark ? 'bg-amber-400 text-slate-950' : 'bg-yellow-300 text-slate-900'
-            }`}
-          >
-            {part}
-          </mark>
-        ) : (
-          <span key={i}>{part}</span>
-        )
-      )}
-    </span>
-  );
-}
+import { calculateEffectivePrice } from '@/lib/wholesale-rules';
 
 export default function POSClient() {
   const [currentUser, setCurrentUser] = useState<POSUser | null>(null);
@@ -86,6 +46,12 @@ export default function POSClient() {
 
   const [theme, setTheme] = useState<'dark' | 'light'>('light');
   const [isGrosirMode, setIsGrosirMode] = useState(false);
+  const [isOverrideGrosir1, setIsOverrideGrosir1] = useState(false);
+
+  // Manual Invoice Discount State
+  const [manualDiscountType, setManualDiscountType] = useState<'NOMINAL' | 'PERCENT'>('NOMINAL');
+  const [manualDiscountValue, setManualDiscountValue] = useState<number>(0);
+  const [manualDiscountReason, setManualDiscountReason] = useState<string>('');
 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
@@ -138,10 +104,6 @@ export default function POSClient() {
 
   const { isConnected, connectPrinter, disconnectPrinter, printText, playBeep } = usePOSHardware();
 
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
-  };
-
   const fetchProducts = useCallback(async (query = '', showRefreshAnimation = false) => {
     if (showRefreshAnimation) setIsRefreshing(true);
     else setIsLoading(true);
@@ -177,77 +139,108 @@ export default function POSClient() {
     return () => clearInterval(timer);
   }, []);
 
+  // Helper to compute effective item price using wholesale rules
+  const computeItemPricing = useCallback((product: Product, quantity: number, override: boolean, grosir: boolean) => {
+    if (override) {
+      const calc = calculateEffectivePrice(
+        {
+          price: product.priceRetail,
+          grosir1: product.priceGrosir1,
+          grosir2: product.priceGrosir2,
+          grosir3: product.priceGrosir3,
+          wholesaleCategory: product.wholesaleCategory,
+        },
+        quantity,
+        true
+      );
+      return { selectedPrice: calc.effectivePrice, priceType: 'override_grosir1' as const };
+    }
+
+    if (grosir) {
+      const calc = calculateEffectivePrice(
+        {
+          price: product.priceRetail,
+          grosir1: product.priceGrosir1,
+          grosir2: product.priceGrosir2,
+          grosir3: product.priceGrosir3,
+          wholesaleCategory: product.wholesaleCategory,
+        },
+        quantity,
+        false
+      );
+
+      let priceType: CartItem['priceType'] = 'retail';
+      if (calc.tier === 1) priceType = 'grosir1';
+      else if (calc.tier === 2) priceType = 'grosir2';
+      else if (calc.tier === 3) priceType = 'grosir3';
+
+      return { selectedPrice: calc.effectivePrice, priceType };
+    }
+
+    return { selectedPrice: product.priceRetail, priceType: 'retail' as const };
+  }, []);
+
   // Restore persistent state from localStorage on mount
   useEffect(() => {
     try {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       const savedUser = localStorage.getItem('hk_pos_user');
       if (savedUser) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setCurrentUser(JSON.parse(savedUser));
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIsLoginOpen(false);
       }
 
       const savedCart = localStorage.getItem('hk_pos_cart');
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (savedCart) setCart(JSON.parse(savedCart));
 
       const savedMode = localStorage.getItem('hk_pos_grosir_mode');
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (savedMode !== null) setIsGrosirMode(JSON.parse(savedMode));
 
+      const savedOverride = localStorage.getItem('hk_pos_override_grosir');
+      if (savedOverride !== null) setIsOverrideGrosir1(JSON.parse(savedOverride));
+
       const savedCustomer = localStorage.getItem('hk_pos_customer');
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (savedCustomer) setSelectedCustomer(JSON.parse(savedCustomer));
 
       const savedTransactionId = localStorage.getItem('hk_pos_transaction_id');
       if (savedTransactionId) activeTransactionIdRef.current = Number(savedTransactionId);
 
       const savedTransactionNo = localStorage.getItem('hk_pos_transaction_no');
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (savedTransactionNo) setActiveTransactionNo(savedTransactionNo);
     } catch (e) {
       console.error('Failed to restore POS state from localStorage:', e);
     } finally {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsInitialized(true);
     }
   }, []);
 
-  // Sync currentUser to localStorage
+  // Sync state to localStorage
   useEffect(() => {
     if (!isInitialized) return;
-    if (currentUser) {
-      localStorage.setItem('hk_pos_user', JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem('hk_pos_user');
-    }
+    if (currentUser) localStorage.setItem('hk_pos_user', JSON.stringify(currentUser));
+    else localStorage.removeItem('hk_pos_user');
   }, [currentUser, isInitialized]);
 
-  // Sync cart to localStorage
   useEffect(() => {
     if (!isInitialized) return;
     localStorage.setItem('hk_pos_cart', JSON.stringify(cart));
   }, [cart, isInitialized]);
 
-  // Sync Grosir Mode to localStorage
   useEffect(() => {
     if (!isInitialized) return;
     localStorage.setItem('hk_pos_grosir_mode', JSON.stringify(isGrosirMode));
   }, [isGrosirMode, isInitialized]);
 
-  // Sync selectedCustomer to localStorage
   useEffect(() => {
     if (!isInitialized) return;
-    if (selectedCustomer) {
-      localStorage.setItem('hk_pos_customer', JSON.stringify(selectedCustomer));
-    } else {
-      localStorage.removeItem('hk_pos_customer');
-    }
+    localStorage.setItem('hk_pos_override_grosir', JSON.stringify(isOverrideGrosir1));
+  }, [isOverrideGrosir1, isInitialized]);
+
+  useEffect(() => {
+    if (!isInitialized) return;
+    if (selectedCustomer) localStorage.setItem('hk_pos_customer', JSON.stringify(selectedCustomer));
+    else localStorage.removeItem('hk_pos_customer');
   }, [selectedCustomer, isInitialized]);
 
-  // Sync active transaction to localStorage
   useEffect(() => {
     if (!isInitialized) return;
     if (activeTransactionIdRef.current) {
@@ -263,119 +256,44 @@ export default function POSClient() {
     }
   }, [activeTransactionNo, isInitialized]);
 
-  // Auto focus search input on mount for barcode scanner readiness
-  useEffect(() => {
-    searchInputRef.current?.focus();
-  }, []);
-
-  // Handle Barcode Scanner Enter Key (Matches EPPOS EP1400C behavior)
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && searchQuery.trim()) {
-      e.preventDefault();
-      const exactMatch =
-        products.find(
-          (p) => p.barcode.toLowerCase() === searchQuery.trim().toLowerCase()
-        ) || (products.length === 1 ? products[0] : null);
-
-      if (exactMatch) {
-        addToCart(exactMatch);
-        setSearchQuery('');
-      } else {
-        // Check database if not found locally
-        setIsScanning(true);
-        fetch(`/api/products/scan?barcode=${encodeURIComponent(searchQuery.trim())}`)
-          .then(res => res.json())
-          .then(data => {
-            if (data.success && data.data) {
-              addToCart(data.data);
-              setSearchQuery('');
-            } else {
-              playBeep('error');
-            }
-          })
-          .catch(err => {
-            console.error('Search barcode lookup failed:', err);
-            playBeep('error');
-          })
-          .finally(() => {
-            setIsScanning(false);
-          });
-      }
-    }
-  };
-
-  // Global Keyboard Shortcuts
-  useKeyboardShortcuts({
-    'F2': (e) => searchInputRef.current?.focus(),
-    'F4': (e) => handleToggleGrosir(),
-    'F8': (e) => setIsMemberModalOpen(true),
-    'F9': (e) => { if (cart.length > 0) setIsPaymentModalOpen(true); },
-    'F10': (e) => handleOpenSummaryModal(),
-    'Escape': (e) => {
-      setIsMemberModalOpen(false);
-      setIsSummaryModalOpen(false);
-      setIsSettingsModalOpen(false);
-      setMemoItem(null);
-      setVoidItem(null);
-    }
-  });
-
-  const handleToggleGrosir = () => {
-    const nextGrosirState = !isGrosirMode;
-    setIsGrosirMode(nextGrosirState);
-
+  // Recalculate cart prices when Grosir Mode or Override Grosir changes
+  const applyPricingToCart = useCallback((override: boolean, grosir: boolean) => {
     setCart((prevCart) =>
       prevCart.map((item) => {
-        let price = item.product.priceRetail;
-        let priceType: CartItem['priceType'] = 'retail';
-
-        if (nextGrosirState) {
-          if (item.quantity >= 60) {
-            price = item.product.priceGrosir3;
-            priceType = 'grosir3';
-          } else if (item.quantity >= 12) {
-            price = item.product.priceGrosir2;
-            priceType = 'grosir2';
-          } else {
-            price = item.product.priceGrosir1;
-            priceType = 'grosir1';
-          }
-        }
-
+        const { selectedPrice, priceType } = computeItemPricing(item.product, item.quantity, override, grosir);
         return {
           ...item,
-          selectedPrice: price,
+          selectedPrice,
           priceType,
         };
       })
     );
+  }, [computeItemPricing]);
+
+  const handleToggleGrosir = () => {
+    const nextGrosir = !isGrosirMode;
+    setIsGrosirMode(nextGrosir);
+    applyPricingToCart(isOverrideGrosir1, nextGrosir);
   };
 
+  const handleToggleOverrideGrosir1 = () => {
+    const nextOverride = !isOverrideGrosir1;
+    setIsOverrideGrosir1(nextOverride);
+    applyPricingToCart(nextOverride, isGrosirMode);
+  };
+
+  // Add Item to Cart
   const addToCart = useCallback((product: Product) => {
     playBeep('success');
 
     setCart((prevCart) => {
       const existingIndex = prevCart.findIndex((i) => i.product.id === product.id && !i.isVoided);
-      let selectedPrice = product.priceRetail;
-      let priceType: CartItem['priceType'] = 'retail';
-
       let newQty = scanQty;
       if (existingIndex > -1) {
         newQty = prevCart[existingIndex].quantity + scanQty;
       }
 
-      if (isGrosirMode) {
-        if (newQty >= 60) {
-          selectedPrice = product.priceGrosir3;
-          priceType = 'grosir3';
-        } else if (newQty >= 12) {
-          selectedPrice = product.priceGrosir2;
-          priceType = 'grosir2';
-        } else {
-          selectedPrice = product.priceGrosir1;
-          priceType = 'grosir1';
-        }
-      }
+      const { selectedPrice, priceType } = computeItemPricing(product, newQty, isOverrideGrosir1, isGrosirMode);
 
       // Fire and forget API call for active transaction sync
       (async () => {
@@ -436,8 +354,8 @@ export default function POSClient() {
         ];
       }
     });
-    setScanQty(1); // Reset to 1 after adding to cart
-  }, [isGrosirMode, playBeep, scanQty, currentUser, selectedCustomer]);
+    setScanQty(1);
+  }, [isGrosirMode, isOverrideGrosir1, computeItemPricing, playBeep, scanQty, currentUser, selectedCustomer]);
 
   const updateQty = (index: number, delta: number) => {
     setCart((prevCart) => {
@@ -445,23 +363,12 @@ export default function POSClient() {
       const newQty = updated[index].quantity + delta;
       const product = updated[index].product;
 
-      let selectedPrice = product.priceRetail;
-      let priceType: CartItem['priceType'] = 'retail';
-
-      if (newQty > 0 && isGrosirMode) {
-        if (newQty >= 60) {
-          selectedPrice = product.priceGrosir3;
-          priceType = 'grosir3';
-        } else if (newQty >= 12) {
-          selectedPrice = product.priceGrosir2;
-          priceType = 'grosir2';
-        } else {
-          selectedPrice = product.priceGrosir1;
-          priceType = 'grosir1';
-        }
+      if (newQty <= 0) {
+        return updated.filter((_, i) => i !== index);
       }
 
-      // Sync with DB
+      const { selectedPrice, priceType } = computeItemPricing(product, newQty, isOverrideGrosir1, isGrosirMode);
+
       if (activeTransactionIdRef.current) {
         (async () => {
           try {
@@ -481,10 +388,6 @@ export default function POSClient() {
         })();
       }
 
-      if (newQty <= 0) {
-        return updated.filter((_, i) => i !== index);
-      }
-
       updated[index] = {
         ...updated[index],
         quantity: newQty,
@@ -495,6 +398,56 @@ export default function POSClient() {
       return updated;
     });
   };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && searchQuery.trim()) {
+      e.preventDefault();
+      const exactMatch =
+        products.find(
+          (p) => p.barcode.toLowerCase() === searchQuery.trim().toLowerCase()
+        ) || (products.length === 1 ? products[0] : null);
+
+      if (exactMatch) {
+        addToCart(exactMatch);
+        setSearchQuery('');
+      } else {
+        setIsScanning(true);
+        fetch(`/api/products/scan?barcode=${encodeURIComponent(searchQuery.trim())}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.success && data.data) {
+              addToCart(data.data);
+              setSearchQuery('');
+            } else {
+              playBeep('error');
+            }
+          })
+          .catch(err => {
+            console.error('Search barcode lookup failed:', err);
+            playBeep('error');
+          })
+          .finally(() => {
+            setIsScanning(false);
+          });
+      }
+    }
+  };
+
+  // Keyboard Shortcuts
+  useKeyboardShortcuts({
+    'F2': () => searchInputRef.current?.focus(),
+    'F4': () => handleToggleGrosir(),
+    'F8': () => setIsMemberModalOpen(true),
+    'F9': () => { if (cart.length > 0) setIsPaymentModalOpen(true); },
+    'F10': () => handleOpenSummaryModal(),
+    'Escape': () => {
+      setIsMemberModalOpen(false);
+      setIsSummaryModalOpen(false);
+      setIsSettingsModalOpen(false);
+      setMemoItem(null);
+      setVoidItem(null);
+    }
+  });
 
   const handleSaveMemo = (targetItem: CartItem, memo: string) => {
     setCart((prevCart) =>
@@ -510,54 +463,39 @@ export default function POSClient() {
     );
   };
 
-  // --- GLOBAL BARCODE SCANNER ---
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Abaikan jika user sedang mengetik di dalam input field (misal search box, note, modal)
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
-
-      // Jangan cegah shortcut sistem atau navigasi
-      if (e.ctrlKey || e.altKey || e.metaKey || e.key.length > 1) {
-        return;
-      }
-      
-      // Jika scanner mulai mengetik, segera fokus ke search box dan tambahkan karakternya
-      if (document.activeElement !== searchInputRef.current) {
-        e.preventDefault();
-        setSearchQuery(prev => prev + e.key);
-        searchInputRef.current?.focus();
-      }
-    };
-
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, []);
-
+  // Calculations
   const activeCartItems = cart.filter((item) => !item.isVoided);
   const rawSubtotal = activeCartItems.reduce((sum, item) => sum + item.selectedPrice * item.quantity, 0);
   
   const memberDiscountPercent = selectedCustomer ? selectedCustomer.discountPercent : 0;
   const memberDiscountAmount = Math.round((rawSubtotal * memberDiscountPercent) / 100);
   const voucherDiscountAmount = voucherCode.trim().toUpperCase() === 'HARMONY10' ? 10000 : 0;
-  const totalDiscount = memberDiscountAmount + voucherDiscountAmount;
+  
+  // Manual discount calculation (after subtotal/wholesale, before tax/service)
+  let calculatedManualDiscount = 0;
+  if (manualDiscountValue > 0) {
+    if (manualDiscountType === 'PERCENT') {
+      calculatedManualDiscount = Math.round((rawSubtotal * Math.min(100, Math.max(0, manualDiscountValue))) / 100);
+    } else {
+      calculatedManualDiscount = Math.min(rawSubtotal, Math.max(0, manualDiscountValue));
+    }
+  }
 
+  const isManualDiscountValid = manualDiscountValue <= 0 || manualDiscountReason.trim().length > 0;
+  const totalDiscount = memberDiscountAmount + voucherDiscountAmount + calculatedManualDiscount;
   const afterDiscount = Math.max(0, rawSubtotal - totalDiscount);
   const taxAmount = Math.round((afterDiscount * posSettings.taxPercent) / 100);
   const serviceAmount = Math.round((afterDiscount * posSettings.servicePercent) / 100);
-
   const grandTotal = afterDiscount + taxAmount + serviceAmount;
-  const totalItemsCount = activeCartItems.reduce((sum, item) => sum + item.quantity, 0);
-  const numPaid = typeof cashPaid === 'number' ? cashPaid : grandTotal;
-  const changeAmount = Math.max(0, numPaid - grandTotal);
 
-  const setQuickPaid = (amount: number) => {
-    setCashPaid(amount);
-  };
-
+  // Checkout Handler
   const handleCheckout = async (finalCashPaid: number, finalPaymentMethod: string) => {
     if (activeCartItems.length === 0) return;
+
+    if (manualDiscountValue > 0 && !manualDiscountReason.trim()) {
+      alert('Alasan diskon manual wajib diisi sebelum pembayaran.');
+      return;
+    }
 
     setCashPaid(finalCashPaid);
     setPaymentMethod(finalPaymentMethod as any);
@@ -570,59 +508,58 @@ export default function POSClient() {
       cart: [...cart],
       cashPaid: finalCashPaid,
       invoiceNo: currentInvNo,
-      orderType: isGrosirMode ? 'Grosir' : 'Retail',
+      orderType: isOverrideGrosir1 ? 'Grosir (Override G1)' : (isGrosirMode ? 'Grosir' : 'Retail'),
       customer: selectedCustomer,
       paymentMethod: finalPaymentMethod as any,
       discountAmount: totalDiscount,
     });
 
     try {
+      const checkoutPayload = {
+        cashierName: currentUser?.name || 'Kasir',
+        subtotal: rawSubtotal,
+        discountAmount: totalDiscount,
+        total: grandTotal,
+        paymentMethod: finalPaymentMethod,
+        cashPaid: finalCashPaid,
+        isOverrideGrosir1,
+        manualDiscountAmount: calculatedManualDiscount,
+        manualDiscountPercent: manualDiscountType === 'PERCENT' ? manualDiscountValue : 0,
+        manualDiscountReason: manualDiscountReason.trim() || undefined,
+        notes: '',
+      };
+
       if (activeTransactionIdRef.current) {
         await fetch(`/api/transactions/active/${activeTransactionIdRef.current}/checkout`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            cashierName: currentUser?.name || 'Kasir',
-            subtotal: rawSubtotal,
-            discountAmount: totalDiscount,
-            total: grandTotal,
-            paymentMethod: finalPaymentMethod,
-            cashPaid: finalCashPaid,
-            notes: '',
-          }),
+          body: JSON.stringify(checkoutPayload),
         });
       } else {
-        // Fallback if no active transaction was created
         await fetch('/api/transactions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             invoiceNo: currentInvNo,
-            cashierName: currentUser?.name || 'Kasir',
+            ...checkoutPayload,
             mode: isGrosirMode ? 'Grosir' : 'Retail',
             customerId: selectedCustomer?.id || null,
-            subtotal: rawSubtotal,
-            discountAmount: totalDiscount,
             taxAmount,
             serviceCharge: serviceAmount,
-            total: grandTotal,
-            paymentMethod: finalPaymentMethod,
-            cashPaid: finalCashPaid,
             change: changeAmt,
-            isGrosirMode,
             items: cart,
           }),
         });
       }
       
-      // Clear active transaction
       activeTransactionIdRef.current = null;
       setActiveTransactionNo(null);
       setCart([]);
-      
+      setManualDiscountValue(0);
+      setManualDiscountReason('');
       fetchProducts(searchQuery);
     } catch (e) {
-      console.error('Failed to post transaction to PostgreSQL:', e);
+      console.error('Failed to post transaction:', e);
     }
 
     setIsPaymentModalOpen(false);
@@ -645,6 +582,8 @@ export default function POSClient() {
       activeTransactionIdRef.current = null;
       setActiveTransactionNo(null);
       setCart([]);
+      setManualDiscountValue(0);
+      setManualDiscountReason('');
       setIsAlertOpen(false);
       setAlertConfirmFn(undefined);
     });
@@ -708,7 +647,7 @@ export default function POSClient() {
         setShiftSummary(json.data);
       }
     } catch (err) {
-      console.error('Failed to fetch shift summary from PostgreSQL:', err);
+      console.error('Failed to fetch shift summary:', err);
     }
   };
 
@@ -727,28 +666,43 @@ export default function POSClient() {
     <div className={`h-screen w-screen flex flex-col font-sans overflow-hidden select-none transition-colors duration-200 ${isDark ? 'bg-[#1e1e1e] text-slate-100' : 'bg-[#f0f0f0] text-slate-900'}`}>
       {/* TOP NAVIGATION TOOLBAR */}
       <header className={`h-12 border-b flex items-center justify-between shrink-0 shadow-sm text-sm font-semibold px-4 ${isDark ? 'border-slate-800 bg-[#2d2d2d] text-white' : 'border-slate-300 bg-[#e0e0e0] text-slate-800'}`}>
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-amber-600">
             <FileText className="w-4 h-4" />
-            <span>Mode {isGrosirMode ? 'Grosir' : 'Retail'}</span>
+            <span className="font-bold">Mode {isGrosirMode ? 'Grosir' : 'Retail'}</span>
           </div>
+
           <div className="flex items-center gap-2">
-            <span className="text-slate-500">Grosir Request</span>
             <button 
               onClick={handleToggleGrosir}
-              className={`cursor-pointer w-10 h-5 rounded-full relative transition-colors ${isGrosirMode ? 'bg-amber-500' : 'bg-slate-400'}`}
+              className={`cursor-pointer px-2.5 py-1 rounded-lg text-xs font-black transition-all ${isGrosirMode ? 'bg-amber-500 text-slate-950 shadow-sm' : 'bg-slate-300 text-slate-700'}`}
             >
-              <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${isGrosirMode ? 'translate-x-5' : ''}`} />
+              Grosir Auto
             </button>
-            <span className="text-slate-500">Retail</span>
           </div>
+
+          {/* ⚡ OVERRIDE SEMUA KE GROSIR 1 TOGGLE */}
+          <button
+            onClick={handleToggleOverrideGrosir1}
+            className={`cursor-pointer px-3 py-1 rounded-lg text-xs font-black flex items-center gap-1.5 transition-all ${
+              isOverrideGrosir1
+                ? 'bg-amber-600 text-white ring-2 ring-amber-400 shadow-md animate-pulse'
+                : isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
+            }`}
+            title="Override semua barang ke harga Grosir Tier 1 tanpa batas minimal qty"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span>Override Grosir 1</span>
+            {isOverrideGrosir1 && <span className="text-[10px] bg-amber-900 px-1 rounded font-mono">ON</span>}
+          </button>
         </div>
+
         <div className="flex items-center gap-6 text-slate-500">
           <button 
             onClick={handleOpenSummaryModal}
             disabled={isFetchingSummary}
             className={`cursor-pointer flex items-center gap-1.5 hover:text-emerald-500 transition-colors disabled:opacity-50 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}
-            title="Laporan / Summary Kasir (F10)"
+            title="Laporan Kasir (F10)"
           >
             {isFetchingSummary ? <RefreshCw className="w-4 h-4 animate-spin" /> : <TrendingUp className="w-4 h-4" />}
             <span className="hidden sm:inline">{isFetchingSummary ? 'Memuat...' : 'Laporan'}</span>
@@ -767,7 +721,14 @@ export default function POSClient() {
         <div className={`flex-1 flex flex-col min-w-0 border-r ${isDark ? 'border-slate-700 bg-[#1e1e1e]' : 'border-slate-300 bg-[#f9fafb]'}`}>
           <div className={`p-4 flex justify-between items-start border-b ${isDark ? 'border-slate-700' : 'border-slate-300'}`}>
             <div className="flex flex-col gap-4">
-              <div className="text-xs text-slate-500 font-semibold">No. Transaksi <span className="text-amber-600 ml-1">{activeTransactionNo || 'New Transaction'}</span></div>
+              <div className="text-xs text-slate-500 font-semibold flex items-center gap-2">
+                <span>No. Transaksi <span className="text-amber-600 ml-1">{activeTransactionNo || 'New Transaction'}</span></span>
+                {isOverrideGrosir1 && (
+                  <span className="px-2 py-0.5 rounded bg-amber-500 text-slate-950 text-[10px] font-black">
+                    OVERRIDE GROSIR 1 AKTIF
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-slate-400">#</span>
                 <input 
@@ -785,6 +746,7 @@ export default function POSClient() {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={handleSearchKeyDown}
                     disabled={isScanning}
+                    placeholder="Scan / Ketik nama barang..."
                     className={`w-80 border rounded px-3 py-1.5 text-sm outline-none transition-colors ${isDark ? 'bg-amber-900/20 border-amber-500/50 focus:bg-slate-800 text-slate-200' : 'bg-yellow-50 border-yellow-200 focus:bg-white focus:border-amber-500 text-slate-900'} ${isScanning ? 'opacity-70' : ''}`} 
                   />
                   {isScanning && (
@@ -795,8 +757,11 @@ export default function POSClient() {
                 </div>
               </div>
             </div>
-            <div className={`text-[3.5rem] leading-none font-medium tabular-nums tracking-tighter ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-              {grandTotal.toLocaleString('id-ID')}
+            <div className="text-right">
+              <div className="text-xs text-slate-400 font-bold uppercase">Total Akhir Tagihan</div>
+              <div className={`text-[3.5rem] leading-none font-medium tabular-nums tracking-tighter ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                {grandTotal.toLocaleString('id-ID')}
+              </div>
             </div>
           </div>
           
@@ -807,7 +772,7 @@ export default function POSClient() {
                   <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} w-1/2`}>Barang</th>
                   <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} text-center w-24`}>Stok</th>
                   <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} text-center w-16`}>#</th>
-                  <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} text-right w-32`}>Harga @unit</th>
+                  <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} text-right w-36`}>Harga @unit</th>
                   <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} text-right w-32`}>Harga Total</th>
                   <th className="px-4 py-2 font-semibold text-center w-12">Aksi</th>
                 </tr>
@@ -821,40 +786,57 @@ export default function POSClient() {
                           <ShoppingCart className="w-8 h-8 opacity-50" />
                         </div>
                         <p className="text-sm font-medium text-slate-500">Belum ada barang di keranjang</p>
-                        <p className="text-xs text-slate-400 mt-1">Scan barcode atau gunakan kotak pencarian di atas</p>
+                        <p className="text-xs text-slate-400 mt-1">Scan barcode atau ketik nama barang di kotak pencarian</p>
                       </div>
                     </td>
                   </tr>
                 ) : (
                   activeCartItems.map((item, idx) => {
-                  const originalIdx = cart.indexOf(item);
-                  return (
-                    <tr key={idx} className={`border-b ${isDark ? 'border-slate-700' : 'border-slate-200'} ${idx % 2 === 0 ? (isDark ? 'bg-[#1e1e1e]' : 'bg-white') : (isDark ? 'bg-[#1a1a1a]' : 'bg-slate-50')}`}>
-                      <td className={`px-4 py-2.5 border-r font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.product.name}</td>
-                      <td className={`px-4 py-2.5 border-r text-center font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.product.stock}</td>
-                      <td className={`px-4 py-2.5 border-r text-center font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.quantity}</td>
-                      <td className={`px-4 py-2.5 border-r text-right font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.selectedPrice.toLocaleString('id-ID')}</td>
-                      <td className={`px-4 py-2.5 border-r text-right font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{(item.selectedPrice * item.quantity).toLocaleString('id-ID')}</td>
-                      <td className="px-4 py-2.5 text-center">
-                        <button 
-                          onClick={() => handleConfirmRemoveItem(item, originalIdx)}
-                          className={`cursor-pointer p-1.5 rounded-md hover:bg-rose-500/20 text-rose-500 transition-colors`}
-                          title="Hapus item"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
+                    const originalIdx = cart.indexOf(item);
+                    return (
+                      <tr key={idx} className={`border-b ${isDark ? 'border-slate-700' : 'border-slate-200'} ${idx % 2 === 0 ? (isDark ? 'bg-[#1e1e1e]' : 'bg-white') : (isDark ? 'bg-[#1a1a1a]' : 'bg-slate-50')}`}>
+                        <td className={`px-4 py-2.5 border-r font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>
+                          <div className="flex items-center gap-2">
+                            <span>{item.product.name}</span>
+                            {item.priceType !== 'retail' && (
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-black uppercase ${
+                                item.priceType === 'override_grosir1'
+                                  ? 'bg-amber-600 text-white'
+                                  : item.priceType === 'grosir3'
+                                  ? 'bg-purple-600 text-white'
+                                  : item.priceType === 'grosir2'
+                                  ? 'bg-indigo-600 text-white'
+                                  : 'bg-emerald-600 text-white'
+                              }`}>
+                                {item.priceType === 'override_grosir1' ? 'OVR G1' : item.priceType}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className={`px-4 py-2.5 border-r text-center font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.product.stock}</td>
+                        <td className={`px-4 py-2.5 border-r text-center font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.quantity}</td>
+                        <td className={`px-4 py-2.5 border-r text-right font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.selectedPrice.toLocaleString('id-ID')}</td>
+                        <td className={`px-4 py-2.5 border-r text-right font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{(item.selectedPrice * item.quantity).toLocaleString('id-ID')}</td>
+                        <td className="px-4 py-2.5 text-center">
+                          <button 
+                            onClick={() => handleConfirmRemoveItem(item, originalIdx)}
+                            className="cursor-pointer p-1.5 rounded-md hover:bg-rose-500/20 text-rose-500 transition-colors"
+                            title="Hapus item"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* RIGHT COLUMN: RECEIPT */}
-        <div className={`w-[320px] flex flex-col p-4 shadow-inner border-l ${isDark ? 'bg-[#2a2a2a] border-slate-900' : 'bg-[#d1d5db] border-slate-300'}`}>
+        {/* RIGHT COLUMN: RECEIPT & DISCOUNTS & PAYMENT */}
+        <div className={`w-[360px] flex flex-col p-4 shadow-inner border-l ${isDark ? 'bg-[#2a2a2a] border-slate-900' : 'bg-[#d1d5db] border-slate-300'}`}>
           <div className={`flex-1 flex flex-col shadow-sm border font-mono text-xs ${isDark ? 'bg-[#1a1a1a] border-slate-600 text-slate-300' : 'bg-white border-slate-300 text-slate-800'}`}>
             <div className="flex-1 overflow-auto">
               <table className="w-full text-left">
@@ -869,7 +851,14 @@ export default function POSClient() {
                   {activeCartItems.map((item, idx) => (
                     <tr key={idx} className="align-top">
                       <td className="py-1.5 pl-2 pr-1 text-center">{item.quantity}</td>
-                      <td className="py-1.5 px-1 pr-2 leading-tight">{item.product.name}</td>
+                      <td className="py-1.5 px-1 pr-2 leading-tight">
+                        <div>{item.product.name}</div>
+                        {item.priceType !== 'retail' && (
+                          <div className="text-[10px] text-amber-500 font-sans font-bold">
+                            [{item.priceType === 'override_grosir1' ? 'Override G1' : item.priceType}]
+                          </div>
+                        )}
+                      </td>
                       <td className="py-1.5 pl-1 pr-2 text-right">{(item.selectedPrice * item.quantity).toLocaleString('id-ID')}</td>
                     </tr>
                   ))}
@@ -877,14 +866,105 @@ export default function POSClient() {
               </table>
             </div>
             
-            <div className={`mt-auto border-t-2 p-2 flex justify-between font-bold ${isDark ? 'border-slate-600' : 'border-slate-800'}`}>
-              <span>{activeCartItems.length} Jenis</span>
-              <span>Total : {grandTotal.toLocaleString('id-ID')}</span>
+            {/* Calculation summary */}
+            <div className={`mt-auto border-t-2 p-2.5 font-bold space-y-1 ${isDark ? 'border-slate-600' : 'border-slate-800'}`}>
+              <div className="flex justify-between">
+                <span>Subtotal ({activeCartItems.length} Jenis)</span>
+                <span>Rp {rawSubtotal.toLocaleString('id-ID')}</span>
+              </div>
+
+              {memberDiscountAmount > 0 && (
+                <div className="flex justify-between text-emerald-600">
+                  <span>Diskon Member ({memberDiscountPercent}%)</span>
+                  <span>-Rp {memberDiscountAmount.toLocaleString('id-ID')}</span>
+                </div>
+              )}
+
+              {calculatedManualDiscount > 0 && (
+                <div className="flex justify-between text-amber-600">
+                  <span>Diskon Manual ({manualDiscountType === 'PERCENT' ? `${manualDiscountValue}%` : 'Nominal'})</span>
+                  <span>-Rp {calculatedManualDiscount.toLocaleString('id-ID')}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between text-sm font-black pt-1 border-t border-slate-300 dark:border-slate-700">
+                <span>Total Tagihan</span>
+                <span>Rp {grandTotal.toLocaleString('id-ID')}</span>
+              </div>
             </div>
           </div>
 
-          <div className="mt-4 flex flex-col gap-2">
+          {/* 🏷️ MANUAL DISCOUNT CONTROLS */}
+          <div className={`mt-3 p-3 rounded-xl border text-xs ${isDark ? 'bg-slate-800/80 border-slate-700' : 'bg-white border-slate-300 shadow-sm'}`}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-bold flex items-center gap-1">
+                <Percent className="w-3.5 h-3.5 text-amber-500" />
+                <span>Diskon Nota Manual</span>
+              </span>
+              <div className="flex rounded-lg overflow-hidden border border-slate-400">
+                <button
+                  onClick={() => setManualDiscountType('NOMINAL')}
+                  className={`px-2 py-0.5 text-[10px] font-bold cursor-pointer ${
+                    manualDiscountType === 'NOMINAL' ? 'bg-amber-500 text-slate-950' : 'bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  Rp
+                </button>
+                <button
+                  onClick={() => setManualDiscountType('PERCENT')}
+                  className={`px-2 py-0.5 text-[10px] font-bold cursor-pointer ${
+                    manualDiscountType === 'PERCENT' ? 'bg-amber-500 text-slate-950' : 'bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  %
+                </button>
+              </div>
+            </div>
 
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <div>
+                <label className="block text-[10px] text-slate-500 font-semibold mb-0.5">
+                  {manualDiscountType === 'PERCENT' ? 'Persen Diskon (1-100)' : 'Nominal Diskon (Rp)'}
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={manualDiscountType === 'PERCENT' ? 100 : rawSubtotal}
+                  value={manualDiscountValue || ''}
+                  onChange={(e) => setManualDiscountValue(parseFloat(e.target.value) || 0)}
+                  placeholder="0"
+                  className={`w-full px-2 py-1 rounded border font-bold text-xs outline-none ${
+                    isDark ? 'bg-slate-900 border-slate-600 text-white' : 'bg-white border-slate-300 text-slate-900'
+                  }`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-slate-500 font-semibold mb-0.5">
+                  Alasan Diskon {manualDiscountValue > 0 ? '*' : ''}
+                </label>
+                <input
+                  type="text"
+                  value={manualDiscountReason}
+                  onChange={(e) => setManualDiscountReason(e.target.value)}
+                  placeholder="Wajib jika ada diskon"
+                  className={`w-full px-2 py-1 rounded border text-xs outline-none ${
+                    manualDiscountValue > 0 && !manualDiscountReason.trim()
+                      ? 'border-rose-500 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200'
+                      : isDark ? 'bg-slate-900 border-slate-600 text-white' : 'bg-white border-slate-300 text-slate-900'
+                  }`}
+                />
+              </div>
+            </div>
+
+            {manualDiscountValue > 0 && !manualDiscountReason.trim() && (
+              <div className="text-[10px] font-bold text-rose-500">
+                * Alasan diskon wajib diisi untuk keamanan audit transaksi.
+              </div>
+            )}
+          </div>
+
+          <div className="mt-3 flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2">
               <button 
                 onClick={() => {
@@ -902,18 +982,22 @@ export default function POSClient() {
               </button>
               <button 
                 onClick={() => setIsPaymentModalOpen(true)}
-                disabled={activeCartItems.length === 0}
-                className={`cursor-pointer flex-1 py-3 rounded text-sm font-semibold border flex justify-center items-center gap-2 shadow-sm transition-colors ${isDark ? 'bg-slate-700 hover:bg-slate-600 text-slate-200 border-slate-600' : 'bg-[#e5e7eb] hover:bg-[#d1d5db] text-slate-800 border-slate-400'} disabled:opacity-50`}
+                disabled={activeCartItems.length === 0 || !isManualDiscountValid}
+                className={`cursor-pointer flex-1 py-3 rounded text-sm font-semibold border flex justify-center items-center gap-2 shadow-sm transition-colors ${
+                  activeCartItems.length > 0 && isManualDiscountValid
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700'
+                    : isDark ? 'bg-slate-700 text-slate-500 border-slate-600' : 'bg-slate-200 text-slate-400 border-slate-300'
+                } disabled:opacity-50`}
               >
-                <Banknote className="w-4 h-4 text-emerald-500" />
-                Payment
+                <Banknote className="w-4 h-4 text-white" />
+                Payment (F9)
               </button>
             </div>
 
             <button 
               onClick={handleClearCart}
               disabled={activeCartItems.length === 0}
-              className="mt-2 w-full cursor-pointer bg-rose-500 hover:bg-rose-600 disabled:opacity-50 text-white py-2 rounded text-sm font-semibold border border-rose-600 flex justify-center items-center gap-2 shadow-sm transition-colors"
+              className="mt-1 w-full cursor-pointer bg-rose-500 hover:bg-rose-600 disabled:opacity-50 text-white py-2 rounded text-sm font-semibold border border-rose-600 flex justify-center items-center gap-2 shadow-sm transition-colors"
             >
               <Trash2 className="w-4 h-4" />
               Batal
