@@ -1,8 +1,18 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { createPOSSession, clearPOSSession, getPOSCurrentUser, inferPOSRole } from '@/lib/session';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    if (searchParams.get('me') === 'true' || searchParams.get('current') === 'true') {
+      const current = await getPOSCurrentUser();
+      if (!current) {
+        return NextResponse.json({ success: false, error: 'Tidak ada sesi aktif' }, { status: 401 });
+      }
+      return NextResponse.json({ success: true, data: current });
+    }
+
     const users = await prisma.m_user.findMany({
       orderBy: { username: 'asc' },
     });
@@ -10,14 +20,15 @@ export async function GET() {
     const mappedUsers = users.map(u => ({
       id: u.id.toString(),
       username: u.username,
-      name: u.username, // Placeholder
-      role: 'Cashier' // Placeholder
+      name: u.username,
+      role: inferPOSRole(u.username),
     }));
 
     return NextResponse.json({ success: true, data: mappedUsers });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
     console.error('Failed to fetch users from PostgreSQL:', err);
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
 
@@ -25,6 +36,10 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { username, password } = body;
+
+    if (!username || !password) {
+      return NextResponse.json({ success: false, error: 'Username dan password wajib diisi.' }, { status: 400 });
+    }
 
     const users = await prisma.m_user.findMany({
       where: { username: String(username).toLowerCase().trim() },
@@ -40,16 +55,39 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Password yang dimasukkan salah.' }, { status: 401 });
     }
 
+    const validUsername = String(user.username || username).trim();
+    const role = inferPOSRole(validUsername);
+    const sessionPayload = {
+      id: Number(user.id),
+      username: validUsername,
+      name: validUsername,
+      role,
+    };
+
+    // Set HTTP-only cryptographic session cookie
+    await createPOSSession(sessionPayload);
+
     const mappedUser = {
       id: user.id.toString(),
-      username: user.username,
-      name: user.username,
-      role: 'Cashier'
+      username: validUsername,
+      name: validUsername,
+      role,
     };
 
     return NextResponse.json({ success: true, data: mappedUser });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
     console.error('Failed to validate user login:', err);
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE() {
+  try {
+    await clearPOSSession();
+    return NextResponse.json({ success: true, message: 'Sesi kasir berhasil diakhiri.' });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

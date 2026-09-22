@@ -455,12 +455,29 @@ export default function POSClient() {
     );
   };
 
-  const handleConfirmVoid = (targetItem: CartItem, reason: string) => {
+  const handleConfirmVoid = async (targetItem: CartItem, reason: string) => {
     setCart((prevCart) =>
       prevCart.map((item) =>
         item === targetItem ? { ...item, isVoided: true, voidReason: reason } : item
       )
     );
+
+    // Sync with server active transaction if exists
+    if (activeTransactionIdRef.current && targetItem.product?.id) {
+      try {
+        await fetch(`/api/transactions/active/${activeTransactionIdRef.current}/items`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            product: { id: targetItem.product.id },
+            quantity: 0,
+            selectedPrice: targetItem.selectedPrice,
+          }),
+        });
+      } catch (err) {
+        console.error('Failed to sync voided item with server:', err);
+      }
+    }
   };
 
   // Calculations
@@ -501,7 +518,8 @@ export default function POSClient() {
     setPaymentMethod(finalPaymentMethod as any);
     const changeAmt = Math.max(0, finalCashPaid - grandTotal);
 
-    const currentInvNo = activeTransactionNo || `INV-${Date.now().toString().slice(-6)}`;
+    const invoiceTimestamp = Date.now().toString().slice(-6);
+    const currentInvNo = activeTransactionNo || `INV-${invoiceTimestamp}`;
     setLastInvoiceNo(currentInvNo);
 
     setLastReceiptData({
@@ -518,25 +536,35 @@ export default function POSClient() {
       const checkoutPayload = {
         cashierName: currentUser?.name || 'Kasir',
         subtotal: rawSubtotal,
+        memberDiscountPercent,
+        memberDiscountAmount,
+        voucherDiscountAmount,
+        manualDiscountMode: manualDiscountType,
+        manualDiscountValue: manualDiscountValue,
+        manualDiscountAmount: calculatedManualDiscount,
+        manualDiscountReason: manualDiscountReason.trim() || undefined,
         discountAmount: totalDiscount,
+        taxPercent: posSettings.taxPercent,
+        taxAmount,
+        servicePercent: posSettings.servicePercent,
+        serviceAmount,
         total: grandTotal,
         paymentMethod: finalPaymentMethod,
         cashPaid: finalCashPaid,
-        isOverrideGrosir1,
-        manualDiscountAmount: calculatedManualDiscount,
-        manualDiscountPercent: manualDiscountType === 'PERCENT' ? manualDiscountValue : 0,
-        manualDiscountReason: manualDiscountReason.trim() || undefined,
+        isOverrideGrosir: isOverrideGrosir1,
+        isOverrideGrosir1: isOverrideGrosir1,
         notes: '',
       };
 
+      let res: Response;
       if (activeTransactionIdRef.current) {
-        await fetch(`/api/transactions/active/${activeTransactionIdRef.current}/checkout`, {
+        res = await fetch(`/api/transactions/active/${activeTransactionIdRef.current}/checkout`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(checkoutPayload),
         });
       } else {
-        await fetch('/api/transactions', {
+        res = await fetch('/api/transactions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -544,12 +572,17 @@ export default function POSClient() {
             ...checkoutPayload,
             mode: isGrosirMode ? 'Grosir' : 'Retail',
             customerId: selectedCustomer?.id || null,
-            taxAmount,
-            serviceCharge: serviceAmount,
             change: changeAmt,
             items: cart,
           }),
         });
+      }
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        const errMsg = json.error?.message || json.error || json.message || 'Gagal memproses transaksi checkout.';
+        alert(`Checkout Gagal: ${errMsg}`);
+        return;
       }
       
       activeTransactionIdRef.current = null;
@@ -557,13 +590,15 @@ export default function POSClient() {
       setCart([]);
       setManualDiscountValue(0);
       setManualDiscountReason('');
+      setIsOverrideGrosir1(false);
       fetchProducts(searchQuery);
-    } catch (e) {
-      console.error('Failed to post transaction:', e);
-    }
 
-    setIsPaymentModalOpen(false);
-    setIsReceiptOpen(true);
+      setIsPaymentModalOpen(false);
+      setIsReceiptOpen(true);
+    } catch (e: any) {
+      console.error('Failed to post transaction:', e);
+      alert(`Terjadi kesalahan jaringan atau server saat checkout: ${e.message || 'Error'}`);
+    }
   };
 
   const handleClearCart = () => {
