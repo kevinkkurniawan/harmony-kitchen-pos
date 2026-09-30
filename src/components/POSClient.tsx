@@ -18,6 +18,9 @@ import {
   Sparkles,
   Zap,
   Percent,
+  UserCheck,
+  User as UserIcon,
+  ShieldAlert,
 } from 'lucide-react';
 import { Product, CartItem, Customer, ShiftSummary, PaymentMethod } from '@/types/pos';
 import { POSUser } from '@/types/user';
@@ -405,7 +408,7 @@ export default function POSClient() {
       const exactMatch =
         products.find(
           (p) => p.barcode.toLowerCase() === searchQuery.trim().toLowerCase()
-        ) || (products.length === 1 ? products[0] : null);
+        ) || (products.length > 0 ? products[0] : null);
 
       if (exactMatch) {
         addToCart(exactMatch);
@@ -639,11 +642,17 @@ export default function POSClient() {
   const handleLogout = () => {
     setAlertTitle('Konfirmasi Logout');
     setAlertMessage('Apakah Anda yakin ingin keluar dari sistem kasir?');
-    setAlertConfirmFn(() => () => {
+    setAlertConfirmFn(() => async () => {
+      try {
+        await fetch('/api/users', { method: 'DELETE' });
+      } catch (err) {
+        console.error('Logout error:', err);
+      }
       setCurrentUser(null);
       localStorage.removeItem('hk_pos_user');
       setIsLoginOpen(true);
       setIsAlertOpen(false);
+      setAlertConfirmFn(undefined);
     });
     setIsAlertOpen(true);
   };
@@ -732,7 +741,32 @@ export default function POSClient() {
           </button>
         </div>
 
-        <div className="flex items-center gap-6 text-slate-500">
+        <div className="flex items-center gap-4 text-slate-500">
+          {/* Member / Customer Button */}
+          <button
+            onClick={() => setIsMemberModalOpen(true)}
+            className={`cursor-pointer flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+              selectedCustomer
+                ? 'bg-blue-600 text-white shadow-xs'
+                : isDark ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-200 text-slate-800 hover:bg-slate-300'
+            }`}
+            title="Pilih Pelanggan / Member (F8)"
+          >
+            <UserCheck className="w-3.5 h-3.5" />
+            <span className="max-w-[120px] truncate">{selectedCustomer ? `${selectedCustomer.name} (${selectedCustomer.discountPercent}%)` : 'Member (F8)'}</span>
+          </button>
+
+          {/* Settings Button */}
+          <button
+            onClick={() => setIsSettingsModalOpen(true)}
+            className={`cursor-pointer flex items-center gap-1.5 hover:text-sky-500 transition-colors ${isDark ? 'text-slate-300' : 'text-slate-600'}`}
+            title="Pengaturan Kasir & Printer"
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+            <span className="hidden md:inline text-xs font-semibold">Pengaturan</span>
+          </button>
+
+          {/* Laporan (F10) */}
           <button 
             onClick={handleOpenSummaryModal}
             disabled={isFetchingSummary}
@@ -740,12 +774,27 @@ export default function POSClient() {
             title="Laporan Kasir (F10)"
           >
             {isFetchingSummary ? <RefreshCw className="w-4 h-4 animate-spin" /> : <TrendingUp className="w-4 h-4" />}
-            <span className="hidden sm:inline">{isFetchingSummary ? 'Memuat...' : 'Laporan'}</span>
+            <span className="hidden md:inline text-xs font-semibold">{isFetchingSummary ? 'Memuat...' : 'Laporan'}</span>
           </button>
-          <span>{currentTime ? currentTime.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '...'}</span>
-          <span>{currentTime ? currentTime.toLocaleTimeString('id-ID') : '...'}</span>
-          <button onClick={handleLogout} className="cursor-pointer flex items-center gap-1 text-rose-500 hover:text-rose-600 transition-colors">
-            <span className="font-bold">X</span> Keluar
+
+          {/* Cashier Badge */}
+          <button
+            onClick={() => setIsLoginOpen(true)}
+            className={`cursor-pointer flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold ${
+              currentUser
+                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                : 'bg-amber-500/10 text-amber-600 border border-amber-500/30'
+            }`}
+            title="Klik untuk info sesi kasir"
+          >
+            <UserIcon className="w-3.5 h-3.5" />
+            <span>{currentUser?.name || 'Login Kasir'}</span>
+          </button>
+
+          <span className="hidden lg:inline text-xs font-mono">{currentTime ? currentTime.toLocaleTimeString('id-ID') : '...'}</span>
+
+          <button onClick={handleLogout} className="cursor-pointer flex items-center gap-1 text-rose-500 hover:text-rose-600 transition-colors text-xs font-bold">
+            <span>X</span> Keluar
           </button>
         </div>
       </header>
@@ -789,6 +838,32 @@ export default function POSClient() {
                       <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
                     </div>
                   )}
+
+                  {/* Search Results Dropdown */}
+                  {searchQuery.trim().length > 0 && products.length > 0 && (
+                    <div className={`absolute top-full left-0 mt-1 w-96 rounded-xl border shadow-2xl z-40 max-h-60 overflow-y-auto ${isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'}`}>
+                      {products.map((p) => (
+                        <div
+                          key={p.id}
+                          onClick={() => {
+                            addToCart(p);
+                            setSearchQuery('');
+                          }}
+                          className={`p-2.5 border-b last:border-b-0 cursor-pointer flex justify-between items-center transition-colors ${
+                            isDark ? 'border-slate-800 hover:bg-slate-800' : 'border-slate-100 hover:bg-slate-100'
+                          }`}
+                        >
+                          <div>
+                            <div className="font-bold text-xs">{p.name}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">{p.barcode} • Stok: {p.stock}</div>
+                          </div>
+                          <div className="text-xs font-bold text-emerald-600 font-mono">
+                            Rp {p.priceRetail.toLocaleString('id-ID')}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -806,10 +881,10 @@ export default function POSClient() {
                 <tr>
                   <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} w-1/2`}>Barang</th>
                   <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} text-center w-24`}>Stok</th>
-                  <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} text-center w-16`}>#</th>
+                  <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} text-center w-28`}>Qty (#)</th>
                   <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} text-right w-36`}>Harga @unit</th>
                   <th className={`px-4 py-2 font-semibold border-r ${isDark ? 'border-slate-700' : 'border-slate-300'} text-right w-32`}>Harga Total</th>
-                  <th className="px-4 py-2 font-semibold text-center w-12">Aksi</th>
+                  <th className="px-4 py-2 font-semibold text-center w-28">Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -847,19 +922,58 @@ export default function POSClient() {
                               </span>
                             )}
                           </div>
+                          {item.memo && (
+                            <div className="text-[11px] text-amber-600 dark:text-amber-400 italic mt-0.5">
+                              * Catatan: {item.memo}
+                            </div>
+                          )}
                         </td>
                         <td className={`px-4 py-2.5 border-r text-center font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.product.stock}</td>
-                        <td className={`px-4 py-2.5 border-r text-center font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.quantity}</td>
+                        <td className={`px-2 py-2.5 border-r text-center font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => updateQty(originalIdx, -1)}
+                              className="cursor-pointer w-6 h-6 rounded flex items-center justify-center bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-black text-xs transition-colors"
+                              title="Kurangi Qty (-)"
+                            >
+                              -
+                            </button>
+                            <span className="w-8 text-center font-bold font-mono">{item.quantity}</span>
+                            <button
+                              onClick={() => updateQty(originalIdx, 1)}
+                              className="cursor-pointer w-6 h-6 rounded flex items-center justify-center bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-black text-xs transition-colors"
+                              title="Tambah Qty (+)"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </td>
                         <td className={`px-4 py-2.5 border-r text-right font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.selectedPrice.toLocaleString('id-ID')}</td>
                         <td className={`px-4 py-2.5 border-r text-right font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{(item.selectedPrice * item.quantity).toLocaleString('id-ID')}</td>
-                        <td className="px-4 py-2.5 text-center">
-                          <button 
-                            onClick={() => handleConfirmRemoveItem(item, originalIdx)}
-                            className="cursor-pointer p-1.5 rounded-md hover:bg-rose-500/20 text-rose-500 transition-colors"
-                            title="Hapus item"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                        <td className="px-2 py-2.5 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button 
+                              onClick={() => setMemoItem(item)}
+                              className="cursor-pointer p-1.5 rounded-md hover:bg-amber-500/20 text-amber-500 transition-colors"
+                              title="Catatan / Memo Item"
+                            >
+                              <FileText className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => setVoidItem(item)}
+                              className="cursor-pointer p-1.5 rounded-md hover:bg-rose-500/20 text-rose-500 transition-colors"
+                              title="Batalkan Item (Void dengan PIN)"
+                            >
+                              <ShieldAlert className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => handleConfirmRemoveItem(item, originalIdx)}
+                              className="cursor-pointer p-1.5 rounded-md hover:bg-slate-500/20 text-slate-400 hover:text-slate-600 transition-colors"
+                              title="Hapus langsung"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
