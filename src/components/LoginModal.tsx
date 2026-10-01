@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Store, Lock, User as UserIcon, LogIn, AlertCircle, X, LogOut, CheckCircle2 } from 'lucide-react';
-import { MOCK_POS_USERS, POSUser } from '@/types/user';
+import { Store, Lock, User as UserIcon, LogIn, AlertCircle, X, LogOut, CheckCircle2, Loader2 } from 'lucide-react';
+import { POSUser } from '@/types/user';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -24,12 +24,16 @@ export default function LoginModal({
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
+
     setError('');
+    setIsLoading(true);
 
     try {
       const res = await fetch('/api/users', {
@@ -57,6 +61,8 @@ export default function LoginModal({
     } catch (err) {
       console.error('Login database error:', err);
       setError('Gagal menghubungkan ke database kasir.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -67,7 +73,8 @@ export default function LoginModal({
         {onClose && (
           <button
             onClick={onClose}
-            className="cursor-pointer absolute right-4 top-4 p-1.5 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200 transition-colors z-10"
+            disabled={isLoading}
+            className="cursor-pointer absolute right-4 top-4 p-1.5 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200 transition-colors z-10 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <X className="w-4 h-4" />
           </button>
@@ -154,10 +161,11 @@ export default function LoginModal({
               <input
                 type="text"
                 required
+                disabled={isLoading}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Masukkan username kasir"
-                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 disabled:opacity-60 disabled:bg-slate-50 disabled:cursor-not-allowed"
               />
             </div>
 
@@ -169,19 +177,30 @@ export default function LoginModal({
               <input
                 type="password"
                 required
+                disabled={isLoading}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 disabled:opacity-60 disabled:bg-slate-50 disabled:cursor-not-allowed"
               />
             </div>
 
             <button
               type="submit"
-              className="cursor-pointer w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all active:scale-95 mt-2"
+              disabled={isLoading}
+              className="cursor-pointer w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all active:scale-95 mt-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
             >
-              <LogIn className="w-4 h-4" />
-              Masuk Sistem Kasir
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Memproses Login...</span>
+                </>
+              ) : (
+                <>
+                  <LogIn className="w-4 h-4" />
+                  <span>Masuk Sistem Kasir</span>
+                </>
+              )}
             </button>
           </form>
         )}
