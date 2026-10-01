@@ -66,7 +66,6 @@ export default function ReceiptModal({
       const BOLD_OFF = ESC + 'E' + '\x00';
       const CENTER = ESC + 'a' + '\x01';
       const LEFT = ESC + 'a' + '\x00';
-      const RIGHT = ESC + 'a' + '\x02';
       const CUT = GS + 'V' + '\x41' + '\x00';
       const KICK_DRAWER = ESC + 'p' + '\x00' + '\x32' + '\x32';
       
@@ -107,9 +106,9 @@ export default function ReceiptModal({
       str += 'Kembali     : ' + ' '.repeat(Math.max(1, 18 - kembaliStr.length)) + kembaliStr + '\n';
       
       str += '\n' + CENTER;
-      str += 'BARANG YANG SUDAH DIBELI\nTIDAK DAPAT DIKEMBALIKAN /\nDITUKARKAN\n\n';
+      str += 'BARANG YANG SUDAH DIBELI\nTIDAK DAPAT DIKEMBALIKAN /\nDITUKARKAN\n';
       str += 'TERIMA KASIH ATAS KUNJUNGAN ANDA\nlinktr.ee/harmonykitchenware\n';
-      str += '\n\n' + CUT + KICK_DRAWER;
+      str += CUT + KICK_DRAWER;
       
       onPrintText(str);
     } else {
@@ -136,9 +135,9 @@ export default function ReceiptModal({
 
         {/* Modal Body / Thermal Receipt View */}
         <div className="p-6 overflow-y-auto font-mono text-sm leading-tight select-none bg-slate-100 flex-1 border-b border-slate-200">
-          <div className="bg-white p-5 shadow-lg rounded-none border border-slate-300 max-w-[300px] mx-auto receipt-paper text-[#1e40af] font-mono text-xs leading-snug tracking-tight">
+          <div className="bg-white px-4 py-3 shadow-lg rounded-none border border-slate-300 max-w-[300px] mx-auto receipt-paper text-[#1e40af] font-mono text-xs leading-snug tracking-tight">
             {/* Header Nota */}
-            <div className="text-center pb-2 border-b-2 border-[#1e40af]">
+            <div className="text-center pt-0 pb-1.5 border-b-2 border-[#1e40af]">
               <h2 className="font-bold text-sm tracking-wide uppercase text-[#1e40af]">
                 HARMONY KITCHENWARE
               </h2>
@@ -194,7 +193,7 @@ export default function ReceiptModal({
             </div>
 
             {/* Summary Details */}
-            <div className="mt-3 pt-2 border-t-2 border-[#1e40af] space-y-1 text-xs text-[#1e40af]">
+            <div className="mt-2.5 pt-2 border-t-2 border-[#1e40af] space-y-1 text-xs text-[#1e40af]">
               <div className="flex justify-between items-center">
                 <span>{totalKinds} Jenis</span>
                 <div className="flex justify-between w-48">
@@ -235,19 +234,17 @@ export default function ReceiptModal({
               </div>
             </div>
 
-            {/* Footer Nota */}
-            <div className="pt-5 text-center text-xs text-[#1e40af] space-y-2 font-mono">
-              <p className="font-bold uppercase leading-tight">
+            {/* Footer Nota (Compact & Tightened) */}
+            <div className="pt-2.5 pb-0 text-center text-xs text-[#1e40af] space-y-1 font-mono">
+              <p className="font-bold uppercase leading-tight text-[11px]">
                 BARANG YANG SUDAH DIBELI
                 <br />
-                TIDAK DAPAT DIKEMBALIKAN /
-                <br />
-                DITUKARKAN
+                TIDAK DAPAT DIKEMBALIKAN / DITUKARKAN
               </p>
-              <p className="pt-1 font-bold uppercase">
+              <p className="pt-0.5 font-bold uppercase text-[11px]">
                 TERIMA KASIH ATAS KUNJUNGAN ANDA
               </p>
-              <p className="text-[11px] font-mono text-[#1e40af]">
+              <p className="text-[10px] font-mono text-[#1e40af]">
                 linktr.ee/harmonykitchenware
               </p>
             </div>
