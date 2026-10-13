@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { timingSafeEqual } from 'crypto';
 import { createPOSSession, clearPOSSession, getPOSCurrentUser, inferPOSRole } from '@/lib/session';
+
+const INVALID_LOGIN = 'Username atau password salah.';
+
+function passwordMatches(stored: string | null, given: string): boolean {
+  const a = Buffer.from(stored ?? '');
+  const b = Buffer.from(given);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 export async function GET(request: Request) {
   try {
@@ -11,6 +20,11 @@ export async function GET(request: Request) {
         return NextResponse.json({ success: false, error: 'Tidak ada sesi aktif' }, { status: 401 });
       }
       return NextResponse.json({ success: true, data: current });
+    }
+
+    // The user list is only for signed-in staff
+    if (!(await getPOSCurrentUser())) {
+      return NextResponse.json({ success: false, error: 'Sesi kasir tidak valid.' }, { status: 401 });
     }
 
     const users = await prisma.m_user.findMany({
@@ -47,12 +61,9 @@ export async function POST(request: Request) {
     
     const user = users.length > 0 ? users[0] : null;
 
-    if (!user) {
-      return NextResponse.json({ success: false, error: 'Username kasir tidak ditemukan di database.' }, { status: 404 });
-    }
-
-    if (user.password !== password) {
-      return NextResponse.json({ success: false, error: 'Password yang dimasukkan salah.' }, { status: 401 });
+    // Same message for unknown user and wrong password, so usernames can't be probed
+    if (!user || !passwordMatches(user.password, String(password))) {
+      return NextResponse.json({ success: false, error: INVALID_LOGIN }, { status: 401 });
     }
 
     const validUsername = String(user.username || username).trim();

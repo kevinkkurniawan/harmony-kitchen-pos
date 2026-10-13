@@ -1,31 +1,34 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { verifyPOSCapability } from '@/lib/capabilities';
+import { generateInvoiceNo, storeDate } from '@/lib/pos-rules';
 
 export async function POST(request: Request) {
   try {
+    const auth = await verifyPOSCapability();
+    if (auth.errorResponse) return auth.errorResponse;
+    const cashierName = auth.user.name || auth.user.username || 'Kasir';
+
     const body = await request.json();
-    const { cashierName, isGrosirMode, customerId, product, quantity, selectedPrice } = body;
+    const { isGrosirMode, customerId, product, quantity, selectedPrice } = body;
 
     if (!product || !quantity || !selectedPrice) {
       return NextResponse.json({ success: false, error: 'Missing required item fields' }, { status: 400 });
     }
 
-    // Generate Invoice No: PS + YYMMDD + Random 4 digits
-    const dateStr = new Date().toISOString().slice(2, 10).replace(/-/g, ''); // YYMMDD
-    const randomCode = Math.floor(1000 + Math.random() * 9000);
-    const invoiceNo = `PS${dateStr}${randomCode}`;
-
     const transaction = await prisma.$transaction(async (tx) => {
+      const invoiceNo = await generateInvoiceNo(tx);
+
       // 1. Create Draft Header
       const header = await tx.t_salesposheader.create({
         data: {
           salesposno: invoiceNo,
-          salesposdate: new Date(),
+          salesposdate: storeDate(),
           isgrosir: Boolean(isGrosirMode),
           customerid: customerId ? Number(customerId) : null,
           status: 'DRAFT',
-          createduser: cashierName || 'Kasir',
-          modifieduser: cashierName || 'Kasir',
+          createduser: cashierName,
+          modifieduser: cashierName,
         },
       });
 
@@ -37,8 +40,8 @@ export async function POST(request: Request) {
           qty: Number(quantity),
           price: Number(selectedPrice),
           subtotal: Number(quantity) * Number(selectedPrice),
-          createduser: cashierName || 'Kasir',
-          modifieduser: cashierName || 'Kasir',
+          createduser: cashierName,
+          modifieduser: cashierName,
         },
       });
 

@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { verifyPOSCapability } from '@/lib/capabilities';
 
 export async function GET(request: Request) {
   try {
+    const auth = await verifyPOSCapability();
+    if (auth.errorResponse) return auth.errorResponse;
+
     const { searchParams } = new URL(request.url);
     const cashierName = searchParams.get('cashierName') || 'Kasir';
 

@@ -15,6 +15,10 @@ interface ReceiptModalProps {
   customer?: Customer | null;
   paymentMethod?: string;
   discountAmount?: number;
+  taxAmount?: number;
+  serviceAmount?: number;
+  /** ISO time of the sale, so reprints show when it was sold rather than now */
+  saleDate?: string;
   notes?: string;
   isConnected?: boolean;
   onPrintText?: (text: string) => void;
@@ -33,6 +37,9 @@ export default function ReceiptModal({
   customer,
   paymentMethod = 'Tunai',
   discountAmount = 0,
+  taxAmount = 0,
+  serviceAmount = 0,
+  saleDate,
   isConnected = false,
   onPrintText,
 }: ReceiptModalProps) {
@@ -41,10 +48,10 @@ export default function ReceiptModal({
   const validCart = cart.filter((item) => !item.isVoided);
   const totalKinds = validCart.length;
   const rawSubtotal = validCart.reduce((sum, item) => sum + item.selectedPrice * item.quantity, 0);
-  const grandTotal = Math.max(0, rawSubtotal - discountAmount);
+  const grandTotal = Math.max(0, rawSubtotal - discountAmount) + taxAmount + serviceAmount;
   const change = Math.max(0, cashPaid - grandTotal);
 
-  const currentDate = new Date();
+  const currentDate = saleDate ? new Date(saleDate) : new Date();
   const dateStr = currentDate.toLocaleDateString('id-ID', {
     day: '2-digit',
     month: 'short',
@@ -72,6 +79,7 @@ export default function ReceiptModal({
       let str = INIT + CENTER + BOLD_ON + 'HARMONY KITCHENWARE\n' + BOLD_OFF;
       str += 'Jalan Panglima Sudirman 65\nWA : 0851 7238 4707\n';
       str += '--------------------------------\n' + LEFT;
+      str += `No: ${invoiceNo}\n`;
       str += `${dateStr} ${timeStr}\nKsr: ${cashierName}\n`;
       str += '--------------------------------\n';
       
@@ -97,6 +105,14 @@ export default function ReceiptModal({
       if (discountAmount > 0) {
         const discStr = Math.round(discountAmount).toLocaleString('en-US');
         str += 'Diskon      :-' + ' '.repeat(Math.max(1, 18 - discStr.length)) + discStr + '\n';
+      }
+      if (taxAmount > 0) {
+        const taxStr = Math.round(taxAmount).toLocaleString('en-US');
+        str += 'Pajak       : ' + ' '.repeat(Math.max(1, 18 - taxStr.length)) + taxStr + '\n';
+      }
+      if (serviceAmount > 0) {
+        const svcStr = Math.round(serviceAmount).toLocaleString('en-US');
+        str += 'Service     : ' + ' '.repeat(Math.max(1, 18 - svcStr.length)) + svcStr + '\n';
       }
       
       const bayarStr = Math.round(cashPaid).toLocaleString('en-US');
@@ -146,7 +162,8 @@ export default function ReceiptModal({
             </div>
 
             {/* Sub Header Nota */}
-            <div className="pt-2 text-xs flex justify-between text-[#1e40af]">
+            <div className="pt-2 text-xs text-left text-[#1e40af]">No : {invoiceNo}</div>
+            <div className="text-xs flex justify-between text-[#1e40af]">
               <span>{dateStr}</span>
               <span>{timeStr}</span>
               <span>Ksr : {cashierName}</span>
@@ -210,6 +227,28 @@ export default function ReceiptModal({
                     <span className="flex-1 text-right pr-2 font-mono">Diskon :</span>
                     <span className="text-right shrink-0 min-w-[70px] font-mono">
                       - {Math.round(discountAmount).toLocaleString('en-US')}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {taxAmount > 0 && (
+                <div className="flex justify-end">
+                  <div className="flex justify-between w-48">
+                    <span className="flex-1 text-right pr-2 font-mono">Pajak :</span>
+                    <span className="text-right shrink-0 min-w-[70px] font-mono">
+                      {Math.round(taxAmount).toLocaleString('en-US')}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {serviceAmount > 0 && (
+                <div className="flex justify-end">
+                  <div className="flex justify-between w-48">
+                    <span className="flex-1 text-right pr-2 font-mono">Service :</span>
+                    <span className="text-right shrink-0 min-w-[70px] font-mono">
+                      {Math.round(serviceAmount).toLocaleString('en-US')}
                     </span>
                   </div>
                 </div>

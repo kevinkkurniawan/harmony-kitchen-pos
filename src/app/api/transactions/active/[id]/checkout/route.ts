@@ -3,6 +3,7 @@ import { calculateEffectivePrice } from '@/lib/wholesale-rules';
 import { verifyPOSCapability } from '@/lib/capabilities';
 import { apiError, apiSuccess } from '@/lib/api-response';
 import { calculateCanonicalSalesTotal } from '@/lib/sales-calculation';
+import { getCustomerDiscountPercent, getTaxRates, getVoucherDiscount } from '@/lib/pos-rules';
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   try {
@@ -15,10 +16,9 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       manualDiscountValue,
       manualDiscountAmount,
       manualDiscountReason,
-      memberDiscountPercent,
-      voucherDiscountAmount,
-      taxPercent,
-      servicePercent,
+      customerId,
+      voucherCode,
+      isGrosirMode,
       isOverrideGrosir,
       isOverrideGrosir1,
       total,
@@ -69,6 +69,28 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      // Claim the draft first: the row lock makes a concurrent second checkout wait here,
+      // then match nothing, so stock and payment can never be booked twice.
+      const claimed = await tx.t_salesposheader.updateMany({
+        where: {
+          id: transactionId,
+          AND: [
+            { OR: [{ status: null }, { status: { not: 'COMPLETED' } }] },
+            { OR: [{ isvoid: null }, { isvoid: false }] },
+          ],
+        },
+        data: { status: 'COMPLETED' },
+      });
+      if (claimed.count === 0) {
+        throw new Error('Transaksi ini sudah selesai atau dibatalkan.');
+      }
+
+      // Discounts and rates come from the server, never from the request body
+      const effectiveCustomerId = customerId ? Number(customerId) : existingHeader.customerid;
+      const memberDiscountPercent = await getCustomerDiscountPercent(tx, effectiveCustomerId);
+      const voucherDiscountAmount = getVoucherDiscount(voucherCode);
+      const { taxPercent, servicePercent } = getTaxRates();
+
       // 4. Fetch details and authoritative inventory data for canonical price & HPP calculation
       // Filter out zero-qty or voided details
       const allDetails = await tx.t_salesposdetail.findMany({
@@ -105,7 +127,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
             grosir1: inv?.grosir1 ? Number(inv.grosir1) : null,
             grosir2: inv?.grosir2 ? Number(inv.grosir2) : null,
             grosir3: inv?.grosir3 ? Number(inv.grosir3) : null,
-            wholesaleCategory: wc,
+            // Tiered wholesale prices only apply in Grosir mode, matching the cashier screen
+            wholesaleCategory: isGrosirMode ? wc : null,
           },
           itemQty,
           overrideActive
@@ -139,12 +162,12 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       // 5. Complete canonical calculation sequence
       const calcResult = calculateCanonicalSalesTotal({
         subtotal: recomputedSubtotal,
-        memberDiscountPercent: memberDiscountPercent ? Number(memberDiscountPercent) : 0,
-        voucherDiscountAmount: voucherDiscountAmount ? Number(voucherDiscountAmount) : 0,
+        memberDiscountPercent,
+        voucherDiscountAmount,
         manualDiscountMode: manualDiscountMode || 'NOMINAL',
         manualDiscountValue: rawDiscountValue,
-        taxPercent: taxPercent !== undefined ? Number(taxPercent) : 0,
-        servicePercent: servicePercent !== undefined ? Number(servicePercent) : 0,
+        taxPercent,
+        servicePercent,
       });
 
       // Verify client-supplied total matches canonical grand total (tolerance: 2 Rp for floating differences)
@@ -199,6 +222,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
           manualdiscountreason: rawDiscountValue > 0 ? manualDiscountReason?.trim() : null,
           manualdiscountuser: rawDiscountValue > 0 ? cashierName : null,
           paymenttypecode: paymentMethod || 'CASH',
+          isgrosir: Boolean(isGrosirMode),
+          customerid: effectiveCustomerId || null,
         },
       });
 
@@ -235,6 +260,10 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       } else {
         paymenttypeid = 1;
         tunai = numCashPaid;
+      }
+
+      if (paymenttypeid === 1 && numCashPaid < calcResult.grandTotal) {
+        throw new Error('Nominal cash kurang dari total tagihan.');
       }
 
       const changevalue = Math.max(0, numCashPaid - calcResult.grandTotal);

@@ -107,6 +107,9 @@ export default function POSClient() {
     customer: Customer | null;
     paymentMethod: PaymentMethod;
     discountAmount: number;
+    taxAmount: number;
+    serviceAmount: number;
+    saleDate: string;
   } | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -542,6 +545,28 @@ export default function POSClient() {
   const grandTotal = afterDiscount + taxAmount + serviceAmount;
 
   // Checkout Handler
+  // The saved user in localStorage can outlive the 12h server session: verify it,
+  // and load tax/service rates, which are set on the server.
+  useEffect(() => {
+    if (!isInitialized || !currentUser) return;
+    (async () => {
+      try {
+        const me = await fetch('/api/users?me=true');
+        if (me.status === 401) {
+          setCurrentUser(null);
+          setIsLoginOpen(true);
+          return;
+        }
+        const settings = await fetch('/api/settings').then((res) => res.json());
+        if (settings.success) {
+          setPosSettings((prev) => ({ ...prev, ...settings.data }));
+        }
+      } catch (err) {
+        console.error('Failed to verify session / load settings:', err);
+      }
+    })();
+  }, [isInitialized, currentUser]);
+
   const handleCheckout = async (finalCashPaid: number, finalPaymentMethod: string): Promise<boolean> => {
     if (activeCartItems.length === 0) return false;
 
@@ -566,6 +591,9 @@ export default function POSClient() {
       customer: selectedCustomer,
       paymentMethod: finalPaymentMethod as any,
       discountAmount: totalDiscount,
+      taxAmount,
+      serviceAmount,
+      saleDate: new Date().toISOString(),
     });
 
     try {
@@ -589,6 +617,9 @@ export default function POSClient() {
         cashPaid: finalCashPaid,
         isOverrideGrosir: isOverrideGrosir1,
         isOverrideGrosir1: isOverrideGrosir1,
+        isGrosirMode,
+        customerId: selectedCustomer?.id || null,
+        voucherCode: voucherCode.trim() || undefined,
         notes: '',
       };
 
@@ -604,10 +635,8 @@ export default function POSClient() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            invoiceNo: currentInvNo,
             ...checkoutPayload,
             mode: isGrosirMode ? 'Grosir' : 'Retail',
-            customerId: selectedCustomer?.id || null,
             change: changeAmt,
             items: cart,
           }),
@@ -615,10 +644,24 @@ export default function POSClient() {
       }
 
       const json = await res.json();
+      if (res.status === 401) {
+        alert('Sesi kasir telah berakhir. Silakan login kembali, lalu ulangi pembayaran.');
+        setIsPaymentModalOpen(false);
+        setCurrentUser(null);
+        setIsLoginOpen(true);
+        return false;
+      }
       if (!res.ok || !json.success) {
         const errMsg = json.error?.message || json.error || json.message || 'Gagal memproses transaksi checkout.';
         alert(`Checkout Gagal: ${errMsg}`);
         return false;
+      }
+
+      // The server assigns the invoice number; print that one
+      const serverInvoiceNo: string | undefined = json.data?.salesposno;
+      if (serverInvoiceNo) {
+        setLastInvoiceNo(serverInvoiceNo);
+        setLastReceiptData((prev) => (prev ? { ...prev, invoiceNo: serverInvoiceNo } : prev));
       }
       
       activeTransactionIdRef.current = null;
@@ -1269,6 +1312,9 @@ export default function POSClient() {
         customer={lastReceiptData?.customer}
         paymentMethod={lastReceiptData?.paymentMethod}
         discountAmount={lastReceiptData?.discountAmount}
+        taxAmount={lastReceiptData?.taxAmount}
+        serviceAmount={lastReceiptData?.serviceAmount}
+        saleDate={lastReceiptData?.saleDate}
         isConnected={isConnected}
         onPrintText={printText}
       />

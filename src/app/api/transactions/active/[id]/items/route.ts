@@ -1,15 +1,29 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { verifyPOSCapability } from '@/lib/capabilities';
+
+/** Items may only change while the sale is still a draft. */
+async function findDraft(transactionId: number) {
+  return prisma.t_salesposheader.findFirst({ where: { id: transactionId, status: 'DRAFT' } });
+}
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   try {
+    const auth = await verifyPOSCapability();
+    if (auth.errorResponse) return auth.errorResponse;
+    const cashierName = auth.user.name || auth.user.username || 'Kasir';
+
     const params = await props.params;
     const transactionId = Number(params.id);
     const body = await request.json();
-    const { cashierName, product, quantity, selectedPrice } = body;
+    const { product, quantity, selectedPrice } = body;
 
     if (!product || !quantity || !selectedPrice) {
       return NextResponse.json({ success: false, error: 'Missing required item fields' }, { status: 400 });
+    }
+
+    if (!(await findDraft(transactionId))) {
+      return NextResponse.json({ success: false, error: 'Transaksi draft tidak ditemukan atau sudah selesai.' }, { status: 409 });
     }
 
     // Check if the item already exists in this transaction
@@ -28,7 +42,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
         data: {
           qty: newQty,
           subtotal: newQty * Number(selectedPrice),
-          modifieduser: cashierName || 'Kasir',
+          modifieduser: cashierName,
         }
       });
       return NextResponse.json({ success: true, data: detail });
@@ -41,8 +55,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
           qty: Number(quantity),
           price: Number(selectedPrice),
           subtotal: Number(quantity) * Number(selectedPrice),
-          createduser: cashierName || 'Kasir',
-          modifieduser: cashierName || 'Kasir',
+          createduser: cashierName,
+          modifieduser: cashierName,
         },
       });
       return NextResponse.json({ success: true, data: detail });
@@ -55,10 +69,18 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
 export async function PUT(request: Request, props: { params: Promise<{ id: string }> }) {
   try {
+    const auth = await verifyPOSCapability();
+    if (auth.errorResponse) return auth.errorResponse;
+    const cashierName = auth.user.name || auth.user.username || 'Kasir';
+
     const params = await props.params;
     const transactionId = Number(params.id);
     const body = await request.json();
-    const { cashierName, product, quantity, selectedPrice } = body;
+    const { product, quantity, selectedPrice } = body;
+
+    if (!(await findDraft(transactionId))) {
+      return NextResponse.json({ success: false, error: 'Transaksi draft tidak ditemukan atau sudah selesai.' }, { status: 409 });
+    }
 
     const existingItem = await prisma.t_salesposdetail.findFirst({
       where: {
@@ -85,10 +107,10 @@ export async function PUT(request: Request, props: { params: Promise<{ id: strin
       data: {
         qty: Number(quantity),
         subtotal: Number(quantity) * Number(selectedPrice),
-        modifieduser: cashierName || 'Kasir',
+        modifieduser: cashierName,
       }
     });
-    
+
     return NextResponse.json({ success: true, data: detail });
   } catch (err: any) {
     console.error('Failed to update item in active transaction:', err);

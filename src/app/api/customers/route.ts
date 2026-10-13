@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { verifyPOSCapability } from '@/lib/capabilities';
+import { getCustomerDiscount } from '@/lib/pos-rules';
 
 export async function GET(request: Request) {
   try {
+    const auth = await verifyPOSCapability();
+    if (auth.errorResponse) return auth.errorResponse;
+
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q')?.toLowerCase() || '';
 
@@ -21,18 +26,7 @@ export async function GET(request: Request) {
     });
 
     const mappedCustomers = customers.map((c) => {
-      let discount = 0;
-      let customerType = 'Regular';
-      if (c.customertypeid === 1) {
-        customerType = 'Vip';
-        discount = 5;
-      } else if (c.customertypeid === 2) {
-        customerType = 'Wholesale';
-        discount = 10;
-      } else if (c.description && /discount:\s*(\d+)/i.test(c.description)) {
-        const match = c.description.match(/discount:\s*(\d+)/i);
-        if (match) discount = Number(match[1]);
-      }
+      const { customerType, discountPercent: discount } = getCustomerDiscount(c);
       return {
         id: c.id.toString(),
         customerNo: c.customerno || '',
@@ -52,6 +46,10 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    // Creating members with discounts is an admin action
+    const auth = await verifyPOSCapability('MANAGE_CUSTOMER');
+    if (auth.errorResponse) return auth.errorResponse;
+
     const body = await request.json();
     const { customerNo, name, phone, customerType, discountPercent } = body;
 
@@ -91,6 +89,9 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const auth = await verifyPOSCapability('MANAGE_CUSTOMER');
+    if (auth.errorResponse) return auth.errorResponse;
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     if (!id) {

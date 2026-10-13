@@ -3,9 +3,13 @@ import { calculateEffectivePrice } from '@/lib/wholesale-rules';
 import { verifyPOSCapability } from '@/lib/capabilities';
 import { apiError, apiSuccess } from '@/lib/api-response';
 import { calculateCanonicalSalesTotal } from '@/lib/sales-calculation';
+import { generateInvoiceNo, getCustomerDiscountPercent, getTaxRates, getVoucherDiscount, storeDate } from '@/lib/pos-rules';
 
 export async function GET() {
   try {
+    const auth = await verifyPOSCapability();
+    if (auth.errorResponse) return auth.errorResponse;
+
     const headers = await prisma.t_salesposheader.findMany({
       orderBy: { createddate: 'desc' },
       take: 50,
@@ -59,16 +63,13 @@ export async function POST(request: Request) {
     const body = await request.json();
 
     const {
-      invoiceNo,
       customerId,
       manualDiscountMode,
       manualDiscountValue,
       manualDiscountAmount,
       manualDiscountReason,
-      memberDiscountPercent,
-      voucherDiscountAmount,
-      taxPercent,
-      servicePercent,
+      voucherCode,
+      isGrosirMode,
       isOverrideGrosir,
       isOverrideGrosir1,
       total,
@@ -112,6 +113,11 @@ export async function POST(request: Request) {
     }
 
     const transaction = await prisma.$transaction(async (tx) => {
+      // Discounts and rates come from the server, never from the request body
+      const memberDiscountPercent = await getCustomerDiscountPercent(tx, customerId ? Number(customerId) : null);
+      const voucherDiscountAmount = getVoucherDiscount(voucherCode);
+      const { taxPercent, servicePercent } = getTaxRates();
+
       // 3. Fetch inventory items and wholesale categories for authoritative price & HPP calculation
       const invIds = activeItems.map((it: { product: { id: string | number } }) => Number(it.product.id));
       const inventories = await tx.inventory.findMany({
@@ -136,7 +142,8 @@ export async function POST(request: Request) {
             grosir1: inv?.grosir1 ? Number(inv.grosir1) : null,
             grosir2: inv?.grosir2 ? Number(inv.grosir2) : null,
             grosir3: inv?.grosir3 ? Number(inv.grosir3) : null,
-            wholesaleCategory: wc,
+            // Tiered wholesale prices only apply in Grosir mode, matching the cashier screen
+            wholesaleCategory: isGrosirMode ? wc : null,
           },
           itemQty,
           overrideActive
@@ -172,12 +179,12 @@ export async function POST(request: Request) {
       // 4. Canonical calculations
       const calcResult = calculateCanonicalSalesTotal({
         subtotal: recomputedSubtotal,
-        memberDiscountPercent: memberDiscountPercent ? Number(memberDiscountPercent) : 0,
-        voucherDiscountAmount: voucherDiscountAmount ? Number(voucherDiscountAmount) : 0,
+        memberDiscountPercent,
+        voucherDiscountAmount,
         manualDiscountMode: manualDiscountMode || 'NOMINAL',
         manualDiscountValue: rawDiscountValue,
-        taxPercent: taxPercent !== undefined ? Number(taxPercent) : 0,
-        servicePercent: servicePercent !== undefined ? Number(servicePercent) : 0,
+        taxPercent,
+        servicePercent,
       });
 
       if (total !== undefined && Math.abs(Number(total) - calcResult.grandTotal) > 2) {
@@ -187,17 +194,18 @@ export async function POST(request: Request) {
       }
 
       // 5. Create Header
-      const currentInvoiceNo = invoiceNo || `INV-${Date.now().toString().slice(-6)}`;
+      const currentInvoiceNo = await generateInvoiceNo(tx);
       const header = await tx.t_salesposheader.create({
         data: {
           salesposno: currentInvoiceNo,
+          salesposdate: storeDate(),
           customerid: customerId ? Number(customerId) : null,
           grandtotal: calcResult.grandTotal,
           deliveryfee: 0,
           remarks: notes || null,
           isvoid: false,
           isdone: true,
-          isgrosir: overrideActive,
+          isgrosir: Boolean(isGrosirMode) || overrideActive,
           status: 'COMPLETED',
           isonline: false,
           isoverridegrosir: overrideActive,
@@ -279,6 +287,10 @@ export async function POST(request: Request) {
       } else {
         paymenttypeid = 1;
         tunai = numCashPaid;
+      }
+
+      if (paymenttypeid === 1 && numCashPaid < calcResult.grandTotal) {
+        throw new Error('Nominal cash kurang dari total tagihan.');
       }
 
       const changevalue = Math.max(0, numCashPaid - calcResult.grandTotal);

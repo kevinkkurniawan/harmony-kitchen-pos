@@ -133,7 +133,7 @@ export default function SettingsModal({
           {/* Section 2: Tax & Service Charge */}
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
-              <Percent className="w-3.5 h-3.5 text-emerald-400" /> Tarif Pajak & Service Charge
+              <Percent className="w-3.5 h-3.5 text-emerald-400" /> Tarif Pajak & Service Charge (diatur server)
             </h3>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -143,7 +143,8 @@ export default function SettingsModal({
                   min={0}
                   max={100}
                   value={formData.taxPercent}
-                  onChange={(e) => setFormData({ ...formData, taxPercent: Number(e.target.value) })}
+                  readOnly
+                  title="Diatur di server (POS_TAX_PERCENT / POS_SERVICE_PERCENT)"
                   className={`w-full p-2.5 rounded-xl text-xs font-bold border outline-none ${
                     isDark ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
@@ -157,7 +158,8 @@ export default function SettingsModal({
                   min={0}
                   max={100}
                   value={formData.servicePercent}
-                  onChange={(e) => setFormData({ ...formData, servicePercent: Number(e.target.value) })}
+                  readOnly
+                  title="Diatur di server (POS_TAX_PERCENT / POS_SERVICE_PERCENT)"
                   className={`w-full p-2.5 rounded-xl text-xs font-bold border outline-none ${
                     isDark ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
