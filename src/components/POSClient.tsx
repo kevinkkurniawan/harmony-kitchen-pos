@@ -110,7 +110,8 @@ export default function POSClient() {
   } | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [isScanning, setIsScanning] = useState(false);
+  const [pendingLookups, setPendingLookups] = useState(0);
+  const isScanning = pendingLookups > 0;
 
   const { isConnected, connectPrinter, disconnectPrinter, printText, playBeep } = usePOSHardware();
 
@@ -425,38 +426,46 @@ export default function POSClient() {
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchQuery.trim()) {
       e.preventDefault();
-      const query = searchQuery.trim().toLowerCase();
-      const exactMatch = products.find((p) => p.barcode.toLowerCase() === query);
+      const code = searchQuery.trim();
+      const query = code.toLowerCase();
+      // Clear right away and resolve each Enter on its own, so back-to-back scans don't
+      // mix into one input or reuse the previous barcode while a lookup is in flight.
+      setSearchQuery('');
 
+      const exactMatch = products.find((p) => p.barcode.toLowerCase() === query);
       if (exactMatch) {
         addToCart(exactMatch);
-        setSearchQuery('');
-      } else {
-        // The product list may still hold results for an older query (scanners type + Enter instantly),
-        // so look the barcode up first and only fall back to a product whose name matches the query.
-        setIsScanning(true);
-        fetch(`/api/products/scan?barcode=${encodeURIComponent(searchQuery.trim())}`)
-          .then(res => res.json())
-          .then(data => {
-            const nameMatch = products.find((p) => p.name.toLowerCase().includes(query));
-            if (data.success && data.data) {
-              addToCart(data.data);
-              setSearchQuery('');
-            } else if (nameMatch) {
-              addToCart(nameMatch);
-              setSearchQuery('');
-            } else {
-              playBeep('error');
-            }
-          })
-          .catch(err => {
-            console.error('Search barcode lookup failed:', err);
-            playBeep('error');
-          })
-          .finally(() => {
-            setIsScanning(false);
-          });
+        return;
       }
+
+      // The visible product list may still hold results for an older query, so resolve
+      // against the server: barcode first, then a fresh name search.
+      setPendingLookups((n) => n + 1);
+      (async () => {
+        try {
+          const scan = await fetch(`/api/products/scan?barcode=${encodeURIComponent(code)}`).then(res => res.json());
+          if (scan.success && scan.data) {
+            addToCart(scan.data);
+            return;
+          }
+          const search = await fetch(`/api/products?q=${encodeURIComponent(code)}&limit=40`).then(res => res.json());
+          const nameMatch: Product | undefined = search.success
+            ? search.data.find((p: Product) => p.name.toLowerCase().includes(query))
+            : undefined;
+          if (nameMatch) {
+            addToCart(nameMatch);
+          } else {
+            playBeep('error');
+            setSearchQuery((current) => current || code);
+          }
+        } catch (err) {
+          console.error('Search barcode lookup failed:', err);
+          playBeep('error');
+          setSearchQuery((current) => current || code);
+        } finally {
+          setPendingLookups((n) => n - 1);
+        }
+      })();
     }
   };
 
@@ -855,7 +864,6 @@ export default function POSClient() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={handleSearchKeyDown}
-                    disabled={isScanning}
                     placeholder="Scan / Ketik nama barang..."
                     className={`w-80 border rounded px-3 py-1.5 text-sm outline-none transition-colors ${isDark ? 'bg-amber-900/20 border-amber-500/50 focus:bg-slate-800 text-slate-200' : 'bg-yellow-50 border-yellow-200 focus:bg-white focus:border-amber-500 text-slate-900'} ${isScanning ? 'opacity-70' : ''}`} 
                   />
