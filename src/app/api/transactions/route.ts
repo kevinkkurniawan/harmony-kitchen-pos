@@ -335,7 +335,7 @@ export async function POST(request: Request) {
       }
 
       return header;
-    });
+    }, { maxWait: 10000, timeout: 30000 });
 
     return apiSuccess(transaction, 'Transaksi berhasil dibuat.');
   } catch (err: unknown) {

@@ -509,12 +509,12 @@ export default function POSClient() {
   const grandTotal = afterDiscount + taxAmount + serviceAmount;
 
   // Checkout Handler
-  const handleCheckout = async (finalCashPaid: number, finalPaymentMethod: string) => {
-    if (activeCartItems.length === 0) return;
+  const handleCheckout = async (finalCashPaid: number, finalPaymentMethod: string): Promise<boolean> => {
+    if (activeCartItems.length === 0) return false;
 
     if (manualDiscountValue > 0 && !manualDiscountReason.trim()) {
       alert('Alasan diskon manual wajib diisi sebelum pembayaran.');
-      return;
+      return false;
     }
 
     setCashPaid(finalCashPaid);
@@ -585,7 +585,7 @@ export default function POSClient() {
       if (!res.ok || !json.success) {
         const errMsg = json.error?.message || json.error || json.message || 'Gagal memproses transaksi checkout.';
         alert(`Checkout Gagal: ${errMsg}`);
-        return;
+        return false;
       }
       
       activeTransactionIdRef.current = null;
@@ -598,9 +598,11 @@ export default function POSClient() {
 
       setIsPaymentModalOpen(false);
       setIsReceiptOpen(true);
+      return true;
     } catch (e: any) {
       console.error('Failed to post transaction:', e);
       alert(`Terjadi kesalahan jaringan atau server saat checkout: ${e.message || 'Error'}`);
+      return false;
     }
   };
 

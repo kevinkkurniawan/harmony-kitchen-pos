@@ -291,7 +291,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       }
 
       return header;
-    });
+    }, { maxWait: 10000, timeout: 30000 });
 
     return apiSuccess(result, 'Transaksi berhasil diselesaikan.');
   } catch (err: unknown) {

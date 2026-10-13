@@ -6,7 +6,7 @@ interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   totalAmount: number;
-  onSubmit: (cashPaid: number, paymentMethod: string) => Promise<void> | void;
+  onSubmit: (cashPaid: number, paymentMethod: string) => Promise<boolean> | boolean;
   isDark: boolean;
 }
 
@@ -62,7 +62,9 @@ export function PaymentModal({
   const handleFinish = async () => {
     setIsSubmitting(true);
     try {
-      await onSubmit(method === 'CASH' ? numCash : totalAmount, method);
+      const ok = await onSubmit(method === 'CASH' ? numCash : totalAmount, method);
+      // Checkout failed on the server: leave the "berhasil" screen so the cashier can retry or cancel
+      if (!ok) setViewState('CONFIRM');
     } finally {
       setIsSubmitting(false);
     }
@@ -300,7 +302,14 @@ export function PaymentModal({
   );
 
   const renderSuccessView = () => (
-    <div className="p-8 flex flex-col items-center text-center gap-6">
+    <div className="relative p-8 flex flex-col items-center text-center gap-6">
+      <button
+        onClick={onClose}
+        disabled={isSubmitting}
+        className={`absolute top-4 right-4 p-1 rounded-full ${isSubmitting ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-200'} ${isDark ? 'hover:bg-slate-700' : ''}`}
+      >
+        <X className={`w-6 h-6 ${textSecondary}`} />
+      </button>
       <div className="w-24 h-24 rounded-full bg-emerald-100 text-emerald-500 flex items-center justify-center mb-2">
         <CheckCircle className="w-12 h-12" />
       </div>
