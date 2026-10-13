@@ -9,6 +9,8 @@ function getDatasourceUrl(): string | undefined {
   if (!raw) return undefined;
   try {
     const url = new URL(raw);
+    // Local Postgres has no pgbouncer: use the URL as-is
+    if (['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) return raw;
     // Switch to port 6543 for transaction pooling to prevent EMAXCONNSESSION
     if (url.port === '5432') {
       url.port = '6543';

@@ -90,6 +90,13 @@ export default function POSClient() {
   const [lastInvoiceNo, setLastInvoiceNo] = useState('');
   
   const activeTransactionIdRef = useRef<number | null>(null);
+  // In-flight creation of the active transaction, so rapid scans don't create two headers
+  const creatingTransactionRef = useRef<Promise<number | null> | null>(null);
+  // Latest cart, readable outside state updaters (server sync must not run inside setCart updaters)
+  const cartRef = useRef<CartItem[]>([]);
+  useEffect(() => {
+    cartRef.current = cart;
+  }, [cart]);
   const [activeTransactionNo, setActiveTransactionNo] = useState<string | null>(null);
 
   const [lastReceiptData, setLastReceiptData] = useState<{
@@ -289,29 +296,59 @@ export default function POSClient() {
   const addToCart = useCallback((product: Product) => {
     playBeep('success');
 
-    setCart((prevCart) => {
-      const existingIndex = prevCart.findIndex((i) => i.product.id === product.id && !i.isVoided);
-      let newQty = scanQty;
-      if (existingIndex > -1) {
-        newQty = prevCart[existingIndex].quantity + scanQty;
-      }
+    const prevCart = cartRef.current;
+    const existingIndex = prevCart.findIndex((i) => i.product.id === product.id && !i.isVoided);
+    let newQty = scanQty;
+    if (existingIndex > -1) {
+      newQty = prevCart[existingIndex].quantity + scanQty;
+    }
 
-      const { selectedPrice, priceType } = computeItemPricing(product, newQty, isOverrideGrosir1, isGrosirMode);
+    const { selectedPrice, priceType } = computeItemPricing(product, newQty, isOverrideGrosir1, isGrosirMode);
 
-      // Fire and forget API call for active transaction sync
-      (async () => {
-        try {
-          if (!activeTransactionIdRef.current) {
+    let nextCart: CartItem[];
+    if (existingIndex > -1) {
+      nextCart = [...prevCart];
+      nextCart[existingIndex] = {
+        ...nextCart[existingIndex],
+        quantity: newQty,
+        selectedPrice,
+        priceType,
+      };
+    } else {
+      nextCart = [
+        ...prevCart,
+        {
+          product,
+          quantity: scanQty,
+          selectedPrice,
+          priceType,
+        },
+      ];
+    }
+    cartRef.current = nextCart;
+    setCart(nextCart);
+
+    // Fire and forget API call for active transaction sync
+    (async () => {
+      try {
+        const itemPayload = {
+          cashierName: currentUser?.name || 'Kasir',
+          product,
+          quantity: scanQty,
+          selectedPrice,
+        };
+        if (!activeTransactionIdRef.current && creatingTransactionRef.current) {
+          await creatingTransactionRef.current;
+        }
+        if (!activeTransactionIdRef.current) {
+          creatingTransactionRef.current = (async () => {
             const res = await fetch('/api/transactions/active', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                cashierName: currentUser?.name || 'Kasir',
+                ...itemPayload,
                 isGrosirMode,
                 customerId: selectedCustomer?.id || null,
-                product,
-                quantity: scanQty,
-                selectedPrice,
               })
             });
             const json = await res.json();
@@ -319,107 +356,94 @@ export default function POSClient() {
               activeTransactionIdRef.current = json.data.id;
               setActiveTransactionNo(json.data.salesposno);
             }
-          } else {
-            await fetch(`/api/transactions/active/${activeTransactionIdRef.current}/items`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                cashierName: currentUser?.name || 'Kasir',
-                product,
-                quantity: scanQty,
-                selectedPrice,
-              })
-            });
+            return activeTransactionIdRef.current;
+          })();
+          try {
+            await creatingTransactionRef.current;
+          } finally {
+            creatingTransactionRef.current = null;
           }
-        } catch (e) {
-          console.error('Failed to sync active transaction', e);
+        } else {
+          await fetch(`/api/transactions/active/${activeTransactionIdRef.current}/items`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(itemPayload)
+          });
         }
-      })();
-
-      if (existingIndex > -1) {
-        const updated = [...prevCart];
-        updated[existingIndex] = {
-          ...updated[existingIndex],
-          quantity: newQty,
-          selectedPrice,
-          priceType,
-        };
-        return updated;
-      } else {
-        return [
-          ...prevCart,
-          {
-            product,
-            quantity: scanQty,
-            selectedPrice,
-            priceType,
-          },
-        ];
+      } catch (e) {
+        console.error('Failed to sync active transaction', e);
       }
-    });
+    })();
+
     setScanQty(1);
   }, [isGrosirMode, isOverrideGrosir1, computeItemPricing, playBeep, scanQty, currentUser, selectedCustomer]);
 
   const updateQty = (index: number, delta: number) => {
-    setCart((prevCart) => {
-      const updated = [...prevCart];
-      const newQty = updated[index].quantity + delta;
-      const product = updated[index].product;
+    const updated = [...cartRef.current];
+    if (!updated[index]) return;
+    const newQty = updated[index].quantity + delta;
+    const product = updated[index].product;
+    const { selectedPrice, priceType } = computeItemPricing(product, Math.max(newQty, 1), isOverrideGrosir1, isGrosirMode);
 
-      if (newQty <= 0) {
-        return updated.filter((_, i) => i !== index);
-      }
+    // Sync before the early-exit below: quantity 0 makes the server delete the line,
+    // otherwise a removed item stays in the transaction and checkout totals mismatch.
+    if (activeTransactionIdRef.current) {
+      (async () => {
+        try {
+          await fetch(`/api/transactions/active/${activeTransactionIdRef.current}/items`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              cashierName: currentUser?.name || 'Kasir',
+              product,
+              quantity: Math.max(newQty, 0),
+              selectedPrice,
+            })
+          });
+        } catch (e) {
+          console.error('Failed to sync item update', e);
+        }
+      })();
+    }
 
-      const { selectedPrice, priceType } = computeItemPricing(product, newQty, isOverrideGrosir1, isGrosirMode);
-
-      if (activeTransactionIdRef.current) {
-        (async () => {
-          try {
-            await fetch(`/api/transactions/active/${activeTransactionIdRef.current}/items`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                cashierName: currentUser?.name || 'Kasir',
-                product,
-                quantity: newQty,
-                selectedPrice,
-              })
-            });
-          } catch (e) {
-            console.error('Failed to sync item update', e);
-          }
-        })();
-      }
-
+    let nextCart: CartItem[];
+    if (newQty <= 0) {
+      nextCart = updated.filter((_, i) => i !== index);
+    } else {
       updated[index] = {
         ...updated[index],
         quantity: newQty,
         selectedPrice,
         priceType,
       };
-
-      return updated;
-    });
+      nextCart = updated;
+    }
+    cartRef.current = nextCart;
+    setCart(nextCart);
   };
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchQuery.trim()) {
       e.preventDefault();
-      const exactMatch =
-        products.find(
-          (p) => p.barcode.toLowerCase() === searchQuery.trim().toLowerCase()
-        ) || (products.length > 0 ? products[0] : null);
+      const query = searchQuery.trim().toLowerCase();
+      const exactMatch = products.find((p) => p.barcode.toLowerCase() === query);
 
       if (exactMatch) {
         addToCart(exactMatch);
         setSearchQuery('');
       } else {
+        // The product list may still hold results for an older query (scanners type + Enter instantly),
+        // so look the barcode up first and only fall back to a product whose name matches the query.
         setIsScanning(true);
         fetch(`/api/products/scan?barcode=${encodeURIComponent(searchQuery.trim())}`)
           .then(res => res.json())
           .then(data => {
+            const nameMatch = products.find((p) => p.name.toLowerCase().includes(query));
             if (data.success && data.data) {
               addToCart(data.data);
+              setSearchQuery('');
+            } else if (nameMatch) {
+              addToCart(nameMatch);
               setSearchQuery('');
             } else {
               playBeep('error');
