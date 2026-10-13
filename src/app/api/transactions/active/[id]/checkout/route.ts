@@ -228,7 +228,9 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       });
 
       // 8. Record Payment in t_salespayment
-      let paymenttypeid = 1;
+      // m_paymenttype.code, as the legacy POS writes it: 0 Cash, 1 Debit, 3 Qris,
+      // 4 Shopee, 5 Tokopedia, 6 Transfer, 7 EDC Mandiri
+      let paymenttypeid = 0;
       let tunai = 0;
       let debit = 0;
       let voucher = 0;
@@ -237,32 +239,32 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       const methodStr = (paymentMethod || 'CASH').toUpperCase();
       
       if (methodStr === 'CASH') {
-        paymenttypeid = 1;
+        paymenttypeid = 0;
         tunai = numCashPaid;
       } else if (methodStr === 'EDC BCA') {
-        paymenttypeid = 3;
+        paymenttypeid = 1;
         debit = calcResult.grandTotal;
       } else if (methodStr === 'EDC MANDIRI') {
-        paymenttypeid = 8;
-        debit = calcResult.grandTotal;
-      } else if (methodStr === 'TRANSFER') {
         paymenttypeid = 7;
         debit = calcResult.grandTotal;
+      } else if (methodStr === 'TRANSFER') {
+        paymenttypeid = 6;
+        debit = calcResult.grandTotal;
       } else if (methodStr === 'QRIS') {
-        paymenttypeid = 4;
+        paymenttypeid = 3;
         debit = calcResult.grandTotal;
       } else if (methodStr === 'SHOPEE') {
-        paymenttypeid = 5;
+        paymenttypeid = 4;
         voucher = calcResult.grandTotal;
       } else if (methodStr === 'TOKOPEDIA') {
-        paymenttypeid = 6;
+        paymenttypeid = 5;
         voucher = calcResult.grandTotal;
       } else {
-        paymenttypeid = 1;
+        paymenttypeid = 0;
         tunai = numCashPaid;
       }
 
-      if (paymenttypeid === 1 && numCashPaid < calcResult.grandTotal) {
+      if (paymenttypeid === 0 && numCashPaid < calcResult.grandTotal) {
         throw new Error('Nominal cash kurang dari total tagihan.');
       }
 

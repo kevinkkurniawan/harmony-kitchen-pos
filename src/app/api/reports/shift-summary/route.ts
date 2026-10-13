@@ -60,19 +60,16 @@ export async function GET(request: Request) {
       grossSales += grandTotal;
       netSales += grandTotal;
 
-      const pmt = payments.find(p => p.salesposid === tx.id);
-      if (pmt) {
-        if (pmt.paymenttypeid === 1) breakdown.cash += grandTotal;
-        else if (pmt.paymenttypeid === 3) breakdown.edcBca += grandTotal;
-        else if (pmt.paymenttypeid === 8) breakdown.edcMandiri += grandTotal;
-        else if (pmt.paymenttypeid === 7) breakdown.transfer += grandTotal;
-        else if (pmt.paymenttypeid === 4) breakdown.qris += grandTotal;
-        else if (pmt.paymenttypeid === 5) breakdown.shopee += grandTotal;
-        else if (pmt.paymenttypeid === 6) breakdown.tokopedia += grandTotal;
-        else breakdown.cash += grandTotal;
-      } else {
-        breakdown.cash += grandTotal;
-      }
+      // Classify by the method name on the sale; the numeric payment code changed
+      // to the legacy m_paymenttype.code, so older POS rows use different numbers
+      const method = (tx.paymenttypecode || 'CASH').toUpperCase();
+      if (method === 'EDC BCA') breakdown.edcBca += grandTotal;
+      else if (method === 'EDC MANDIRI') breakdown.edcMandiri += grandTotal;
+      else if (method === 'TRANSFER') breakdown.transfer += grandTotal;
+      else if (method === 'QRIS') breakdown.qris += grandTotal;
+      else if (method === 'SHOPEE') breakdown.shopee += grandTotal;
+      else if (method === 'TOKOPEDIA') breakdown.tokopedia += grandTotal;
+      else breakdown.cash += grandTotal;
 
       const txDetails = details.filter((d) => d.salesposheaderid === tx.id);
       for (const item of txDetails) {
