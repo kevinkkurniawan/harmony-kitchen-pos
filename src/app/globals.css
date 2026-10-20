@@ -44,19 +44,34 @@ body {
     height: auto !important;
     background: transparent !important;
   }
-  body * {
-    visibility: hidden;
+  /* Remove (not just hide) everything except the receipt and its ancestors,
+     otherwise the hidden POS page keeps its height and the printer feeds
+     blank paper long after the receipt ends. */
+  body *:not(:has(.receipt-paper)):not(.receipt-paper):not(.receipt-paper *) {
+    display: none !important;
+  }
+  /* Flatten the modal wrappers so they collapse to the receipt's own height */
+  body *:has(.receipt-paper) {
+    position: static !important;
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    transform: none !important;
   }
   .no-print {
     display: none !important;
   }
-  .receipt-paper, .receipt-paper * {
-    visibility: visible;
-  }
   .receipt-paper {
-    position: absolute;
-    left: 0;
-    top: 0;
+    position: static;
+    page-break-inside: avoid;
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;

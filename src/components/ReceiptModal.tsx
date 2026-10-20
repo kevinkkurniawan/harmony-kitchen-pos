@@ -187,7 +187,7 @@ export default function ReceiptModal({
                   <div key={idx} className="flex flex-col">
                     <div className="flex items-start font-medium text-[#1e40af]">
                       <span className="w-5 text-left shrink-0 font-mono">{item.quantity}</span>
-                      <span className="flex-1 pr-1 break-words text-left">
+                      <span className="flex-1 pr-3 break-words text-left">
                         {item.product.name}
                       </span>
                       <span className="whitespace-nowrap font-bold text-right shrink-0">
