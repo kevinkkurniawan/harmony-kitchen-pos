@@ -33,6 +33,7 @@ import CashierSummaryModal from '@/components/CashierSummaryModal';
 import SettingsModal from '@/components/SettingsModal';
 import { PaymentModal } from '@/components/PaymentModal';
 import { AlertDialog } from '@/components/AlertDialog';
+import TableColumnResizer from '@/components/TableColumnResizer';
 import { usePOSHardware } from '@/lib/usePOSHardware';
 import { useKeyboardShortcuts } from '@/lib/useKeyboardShortcuts';
 import { calculateEffectivePrice } from '@/lib/wholesale-rules';
@@ -786,6 +787,7 @@ export default function POSClient() {
 
   return (
     <div className={`h-screen w-screen flex flex-col font-sans overflow-hidden select-none transition-colors duration-200 ${isDark ? 'bg-[#1e1e1e] text-slate-100' : 'bg-[#f0f0f0] text-slate-900'}`}>
+      <TableColumnResizer />
       {/* TOP NAVIGATION TOOLBAR */}
       <header className={`h-12 border-b flex items-center justify-between shrink-0 shadow-sm text-sm font-semibold px-4 ${isDark ? 'border-slate-800 bg-[#2d2d2d] text-white' : 'border-slate-300 bg-[#e0e0e0] text-slate-800'}`}>
         <div className="flex items-center gap-4">
