@@ -31,10 +31,10 @@ body {
   background: #475569;
 }
 
-/* Thermal Print Formatting - Zero Margins to eliminate huge header & footer blank spaces */
+/* Thermal Print Formatting - 58mm roll, zero margins to eliminate huge header & footer blank spaces */
 @page {
   margin: 0;
-  size: auto;
+  size: 58mm auto;
 }
 
 @media print {
@@ -69,14 +69,28 @@ body {
   .no-print {
     display: none !important;
   }
+  /* 58mm printers print about 48mm wide; anything wider is cut off at both edges */
   .receipt-paper {
     position: static;
     page-break-inside: avoid;
-    width: 100% !important;
-    max-width: 100% !important;
-    margin: 0 !important;
-    padding: 1.5mm 2mm 1.5mm 2mm !important;
+    box-sizing: border-box !important;
+    width: 48mm !important;
+    max-width: 48mm !important;
+    margin: 0 auto !important;
+    padding: 1mm 0 !important;
     box-shadow: none !important;
     border: none !important;
+    overflow: hidden !important;
+  }
+  /* Thermal printers have no grey: coloured or thin text comes out dithered and faint.
+     Print everything solid black and bold so it is as dark as the old POS receipt. */
+  .receipt-paper,
+  .receipt-paper * {
+    color: #000 !important;
+    border-color: #000 !important;
+    font-weight: 700 !important;
+    -webkit-font-smoothing: none;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }

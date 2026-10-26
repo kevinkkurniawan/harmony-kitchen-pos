@@ -163,7 +163,7 @@ export default function ReceiptModal({
 
             {/* Sub Header Nota */}
             <div className="pt-2 text-xs text-left text-[#1e40af]">No : {invoiceNo}</div>
-            <div className="text-xs flex justify-between text-[#1e40af]">
+            <div className="text-xs flex flex-wrap justify-between gap-x-2 text-[#1e40af]">
               <span>{dateStr}</span>
               <span>{timeStr}</span>
               <span>Ksr : {cashierName}</span>
@@ -187,7 +187,7 @@ export default function ReceiptModal({
                   <div key={idx} className="flex flex-col">
                     <div className="flex items-start font-medium text-[#1e40af]">
                       <span className="w-5 text-left shrink-0 font-mono">{item.quantity}</span>
-                      <span className="flex-1 pr-3 break-words text-left">
+                      <span className="flex-1 min-w-0 pr-3 break-words text-left">
                         {item.product.name}
                       </span>
                       <span className="whitespace-nowrap font-bold text-right shrink-0">
@@ -213,7 +213,7 @@ export default function ReceiptModal({
             <div className="mt-2.5 pt-2 border-t-2 border-[#1e40af] space-y-1 text-xs text-[#1e40af]">
               <div className="flex justify-between items-center">
                 <span>{totalKinds} Jenis</span>
-                <div className="flex justify-between w-48">
+                <div className="flex justify-between flex-1 min-w-0">
                   <span className="flex-1 text-right pr-2 font-mono">Total :</span>
                   <span className="font-bold text-right shrink-0 min-w-[70px] font-mono">
                     {Math.round(grandTotal).toLocaleString('en-US')}
@@ -223,7 +223,7 @@ export default function ReceiptModal({
 
               {discountAmount > 0 && (
                 <div className="flex justify-end">
-                  <div className="flex justify-between w-48 text-rose-600 font-bold">
+                  <div className="flex justify-between w-full text-rose-600 font-bold">
                     <span className="flex-1 text-right pr-2 font-mono">Diskon :</span>
                     <span className="text-right shrink-0 min-w-[70px] font-mono">
                       - {Math.round(discountAmount).toLocaleString('en-US')}
@@ -234,7 +234,7 @@ export default function ReceiptModal({
 
               {taxAmount > 0 && (
                 <div className="flex justify-end">
-                  <div className="flex justify-between w-48">
+                  <div className="flex justify-between w-full">
                     <span className="flex-1 text-right pr-2 font-mono">Pajak :</span>
                     <span className="text-right shrink-0 min-w-[70px] font-mono">
                       {Math.round(taxAmount).toLocaleString('en-US')}
@@ -245,7 +245,7 @@ export default function ReceiptModal({
 
               {serviceAmount > 0 && (
                 <div className="flex justify-end">
-                  <div className="flex justify-between w-48">
+                  <div className="flex justify-between w-full">
                     <span className="flex-1 text-right pr-2 font-mono">Service :</span>
                     <span className="text-right shrink-0 min-w-[70px] font-mono">
                       {Math.round(serviceAmount).toLocaleString('en-US')}
@@ -255,7 +255,7 @@ export default function ReceiptModal({
               )}
 
               <div className="flex justify-end">
-                <div className="flex justify-between w-48">
+                <div className="flex justify-between w-full">
                   <span className="flex-1 text-right pr-2 font-mono">Jumlah Bayar :</span>
                   <span className="font-bold text-right shrink-0 min-w-[70px] font-mono">
                     {Math.round(cashPaid).toLocaleString('en-US')}
@@ -264,7 +264,7 @@ export default function ReceiptModal({
               </div>
 
               <div className="flex justify-end">
-                <div className="flex justify-between w-48">
+                <div className="flex justify-between w-full">
                   <span className="flex-1 text-right pr-2 font-mono">Kembali :</span>
                   <span className="font-bold text-right shrink-0 min-w-[70px] font-mono">
                     {Math.round(change).toLocaleString('en-US')}
