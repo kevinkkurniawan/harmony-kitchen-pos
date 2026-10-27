@@ -69,14 +69,28 @@ body {
   .no-print {
     display: none !important;
   }
+  /* With zero page margins the receipt spans the full paper width, but thermal
+     printers only print the middle of it (72mm of 80mm, 48mm of 58mm), so the
+     edges were cut off ("192,000" printed as "192,0"). 5mm side padding keeps
+     the text inside the printable area on both paper sizes. */
   .receipt-paper {
     position: static;
     page-break-inside: avoid;
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
-    padding: 1.5mm 2mm 1.5mm 2mm !important;
+    padding: 1.5mm 5mm 1.5mm 5mm !important;
     box-shadow: none !important;
     border: none !important;
+  }
+  /* Thermal printers are black-only: the on-screen blue is dithered into a
+     dot pattern and prints faint, so print solid black and slightly heavier. */
+  .receipt-paper,
+  .receipt-paper * {
+    color: #000 !important;
+    border-color: #000 !important;
+  }
+  .receipt-paper *:not(.font-bold) {
+    font-weight: 600 !important;
   }
 }
