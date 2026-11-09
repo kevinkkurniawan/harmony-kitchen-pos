@@ -692,8 +692,7 @@ export default function POSClient() {
       setIsOverrideGrosir1(false);
       fetchProducts(searchQuery);
 
-      setIsPaymentModalOpen(false);
-      setIsReceiptOpen(true);
+      // The payment modal now shows "Payment Berhasil" and the change; its Finish button opens the receipt
       return true;
     } catch (e: any) {
       console.error('Failed to post transaction:', e);
@@ -1318,6 +1317,10 @@ export default function POSClient() {
         onClose={() => setIsPaymentModalOpen(false)}
         totalAmount={grandTotal}
         onSubmit={handleCheckout}
+        onFinish={() => {
+          setIsPaymentModalOpen(false);
+          setIsReceiptOpen(true);
+        }}
         isDark={isDark}
       />
       <ReceiptModal
