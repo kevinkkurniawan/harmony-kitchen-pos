@@ -52,6 +52,7 @@ export default function LoginModal({
         id: json.data.id,
         username: json.data.username,
         name: json.data.name,
+        displayName: json.data.displayName,
         role: json.data.role,
       };
 

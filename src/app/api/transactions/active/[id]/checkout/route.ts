@@ -25,6 +25,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       paymentMethod,
       cashPaid,
       notes,
+      items,
     } = body;
 
     // 1. Authenticate exclusively via cryptographic session cookie
@@ -83,6 +84,33 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       });
       if (claimed.count === 0) {
         throw new Error('Transaksi ini sudah selesai atau dibatalkan.');
+      }
+
+      // The cashier's cart is what gets sold: replace the draft's lines with it, because the background
+      // item sync can lose a line and the totals would then never match. Prices are recalculated below
+      // from inventory, never taken from the cart. One line per item (unique salesposheaderid+inventoryid).
+      if (Array.isArray(items)) {
+        const lines = new Map<number, { qty: number; memo: string | null }>();
+        for (const it of items as { isVoided?: boolean; quantity?: number; memo?: string; product?: { id?: unknown } }[]) {
+          const inventoryId = Number(it.product?.id);
+          const qty = Number(it.quantity || 0);
+          if (it.isVoided || !(qty > 0) || !(inventoryId > 0)) continue;
+          const line = lines.get(inventoryId);
+          lines.set(inventoryId, { qty: (line?.qty || 0) + qty, memo: line?.memo || it.memo || null });
+        }
+        await tx.t_salesposdetail.deleteMany({ where: { salesposheaderid: transactionId } });
+        await tx.t_salesposdetail.createMany({
+          data: Array.from(lines, ([inventoryId, line]) => ({
+            salesposheaderid: transactionId,
+            inventoryid: inventoryId,
+            qty: line.qty,
+            price: 0,
+            subtotal: 0,
+            remarks: line.memo,
+            createduser: cashierName,
+            modifieduser: cashierName,
+          })),
+        });
       }
 
       // Discounts and rates come from the server, never from the request body

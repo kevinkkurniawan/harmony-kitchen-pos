@@ -31,6 +31,12 @@ body {
   background: #475569;
 }
 
+/* Receipt text: the browser's monospace printed thin and hard to read on thermal paper */
+.receipt-paper {
+  font-family: Arial, Helvetica, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Thermal Print Formatting - Zero Margins to eliminate huge header & footer blank spaces */
 @page {
   margin: 0;
@@ -71,15 +77,16 @@ body {
   }
   /* With zero page margins the receipt spans the full paper width, but thermal
      printers only print the middle of it (72mm of 80mm, 48mm of 58mm), so the
-     edges were cut off ("192,000" printed as "192,0"). 5mm side padding keeps
-     the text inside the printable area on both paper sizes. */
+     edges were cut off ("192,000" printed as "192,0"). The store's printer still
+     cut ~2 characters on the left with 5mm (qty column, "4 Jenis"), so the left
+     side gets 9mm; the right side printed fine with 5mm. */
   .receipt-paper {
     position: static;
     page-break-inside: avoid;
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
-    padding: 1.5mm 5mm 1.5mm 5mm !important;
+    padding: 1.5mm 5mm 1.5mm 9mm !important;
     box-shadow: none !important;
     border: none !important;
   }

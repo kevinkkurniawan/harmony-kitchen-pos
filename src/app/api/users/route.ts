@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { usernameEquals } from '@/lib/username';
 import { timingSafeEqual } from 'crypto';
 import { createPOSSession, clearPOSSession, getPOSCurrentUser, inferPOSRole } from '@/lib/session';
 
@@ -55,14 +56,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Username dan password wajib diisi.' }, { status: 400 });
     }
 
+    // Match ignoring case: users created in the ERP were saved as typed ("Dwi") and users synced
+    // from the old app may carry capitals, while cashiers type any case.
     const users = await prisma.m_user.findMany({
-      where: { username: String(username).toLowerCase().trim() },
+      where: { username: usernameEquals(String(username)) },
+      orderBy: { id: 'asc' },
     });
-    
-    const user = users.length > 0 ? users[0] : null;
+
+    const user = users.find((u) => passwordMatches(u.password, String(password))) ?? null;
 
     // Same message for unknown user and wrong password, so usernames can't be probed
-    if (!user || !passwordMatches(user.password, String(password))) {
+    if (!user) {
       return NextResponse.json({ success: false, error: INVALID_LOGIN }, { status: 401 });
     }
 
@@ -78,10 +82,14 @@ export async function POST(request: Request) {
     // Set HTTP-only cryptographic session cookie
     await createPOSSession(sessionPayload);
 
+    // Full name for the receipt ("Ksr : Dwi"); name stays the username because sales and the shift report key on it
+    const employee = await prisma.employee.findUnique({ where: { id: user.employeeid }, select: { employeename: true } });
+
     const mappedUser = {
       id: user.id.toString(),
       username: validUsername,
       name: validUsername,
+      displayName: employee?.employeename?.trim() || validUsername,
       role,
     };
 
