@@ -11,11 +11,14 @@ export async function DELETE(request: Request, props: { params: Promise<{ id: st
     const transactionId = Number(params.id);
 
     const deleted = await prisma.$transaction(async (tx) => {
-      // Only unfinished drafts may be cancelled; completed sales must be voided through the ERP
-      const header = await tx.t_salesposheader.findFirst({
+      // Only unfinished drafts may be cancelled; completed sales must be voided through the ERP.
+      // Touching the row takes the lock the checkout claim takes: a plain read here let a cancel that
+      // raced a checkout delete the just-completed sale while its stock and payment stayed booked.
+      const locked = await tx.t_salesposheader.updateMany({
         where: { id: transactionId, status: 'DRAFT' },
+        data: { modifieddate: new Date() },
       });
-      if (!header) return false;
+      if (locked.count === 0) return false;
 
       // Delete details first
       await tx.t_salesposdetail.deleteMany({

@@ -7,6 +7,8 @@ interface PaymentModalProps {
   onClose: () => void;
   totalAmount: number;
   onSubmit: (cashPaid: number, paymentMethod: string) => Promise<boolean> | boolean;
+  /** "Finish & Cetak Struk" after the sale is saved */
+  onFinish: () => void;
   isDark: boolean;
 }
 
@@ -17,6 +19,7 @@ export function PaymentModal({
   onClose,
   totalAmount,
   onSubmit,
+  onFinish,
   isDark
 }: PaymentModalProps) {
   const [method, setMethod] = useState<PaymentMethod>('CASH');
@@ -24,6 +27,8 @@ export function PaymentModal({
   const [cardNo, setCardNo] = useState<string>('');
   const [viewState, setViewState] = useState<ViewState>('INPUT');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Change shown on the success screen; fixed at submit because the saved sale empties the cart (total 0)
+  const [settledChange, setSettledChange] = useState(0);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -55,16 +60,18 @@ export function PaymentModal({
     setViewState('CONFIRM');
   };
 
-  const confirmPayment = () => {
-    setViewState('SUCCESS');
-  };
-
-  const handleFinish = async () => {
+  // "Payment Berhasil" is shown only after the server has saved the sale; on failure the
+  // cashier stays on the confirmation to retry or go back.
+  const confirmPayment = async () => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
+    const change = changeDue;
     try {
       const ok = await onSubmit(method === 'CASH' ? numCash : totalAmount, method);
-      // Checkout failed on the server: leave the "berhasil" screen so the cashier can retry or cancel
-      if (!ok) setViewState('CONFIRM');
+      if (ok) {
+        setSettledChange(change);
+        setViewState('SUCCESS');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -285,17 +292,19 @@ export function PaymentModal({
       </div>
 
       <div className="flex gap-4 w-full mt-4">
-        <button 
+        <button
           onClick={() => setViewState('INPUT')}
-          className={`cursor-pointer flex-1 py-3 rounded-lg font-bold border transition-colors ${isDark ? 'border-slate-600 text-slate-300 hover:bg-slate-800' : 'border-slate-300 text-slate-700 hover:bg-slate-100'}`}
+          disabled={isSubmitting}
+          className={`flex-1 py-3 rounded-lg font-bold border transition-colors ${isSubmitting ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} ${isDark ? 'border-slate-600 text-slate-300 hover:bg-slate-800' : 'border-slate-300 text-slate-700 hover:bg-slate-100'}`}
         >
           No
         </button>
-        <button 
+        <button
           onClick={confirmPayment}
-          className="cursor-pointer flex-1 py-3 rounded-lg font-bold text-white bg-blue-500 hover:bg-blue-600 transition-colors"
+          disabled={isSubmitting}
+          className={`flex-1 py-3 rounded-lg font-bold text-white bg-blue-500 hover:bg-blue-600 transition-colors ${isSubmitting ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}
         >
-          Yes, Submit
+          {isSubmitting ? 'Memproses...' : 'Yes, Submit'}
         </button>
       </div>
     </div>
@@ -305,8 +314,7 @@ export function PaymentModal({
     <div className="relative p-8 flex flex-col items-center text-center gap-6">
       <button
         onClick={onClose}
-        disabled={isSubmitting}
-        className={`absolute top-4 right-4 p-1 rounded-full ${isSubmitting ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-200'} ${isDark ? 'hover:bg-slate-700' : ''}`}
+        className={`absolute top-4 right-4 p-1 rounded-full cursor-pointer hover:bg-slate-200 ${isDark ? 'hover:bg-slate-700' : ''}`}
       >
         <X className={`w-6 h-6 ${textSecondary}`} />
       </button>
@@ -323,17 +331,16 @@ export function PaymentModal({
         <div className={`w-full p-6 mt-4 rounded-xl border-2 text-center bg-emerald-50 border-emerald-200 ${isDark ? 'bg-slate-800 border-emerald-500/30' : ''}`}>
           <div className={`text-sm font-bold mb-1 ${textSecondary}`}>UANG KEMBALI (CHANGE)</div>
           <div className="text-5xl font-black text-emerald-500">
-            Rp {changeDue.toLocaleString('id-ID')}
+            Rp {settledChange.toLocaleString('id-ID')}
           </div>
         </div>
       )}
 
-      <button 
-        onClick={handleFinish}
-        disabled={isSubmitting}
-        className={`w-full mt-6 py-4 rounded-xl font-bold text-lg text-white bg-emerald-500 hover:bg-emerald-600 transition-colors shadow-lg flex items-center justify-center gap-2 ${isSubmitting ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}
+      <button
+        onClick={onFinish}
+        className="cursor-pointer w-full mt-6 py-4 rounded-xl font-bold text-lg text-white bg-emerald-500 hover:bg-emerald-600 transition-colors shadow-lg flex items-center justify-center gap-2"
       >
-        {isSubmitting ? 'Memproses...' : 'Finish & Cetak Struk'}
+        Finish & Cetak Struk
       </button>
     </div>
   );
