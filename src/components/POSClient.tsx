@@ -25,6 +25,7 @@ import {
 import { Product, CartItem, Customer, ShiftSummary, PaymentMethod } from '@/types/pos';
 import { POSUser } from '@/types/user';
 import ReceiptModal from '@/components/ReceiptModal';
+import QtyInput from '@/components/QtyInput';
 import LoginModal from '@/components/LoginModal';
 import ItemMemoModal from '@/components/ItemMemoModal';
 import VoidReasonModal from '@/components/VoidReasonModal';
@@ -591,22 +592,19 @@ export default function POSClient() {
     setPaymentMethod(finalPaymentMethod as any);
     const changeAmt = Math.max(0, finalCashPaid - grandTotal);
 
-    const invoiceTimestamp = Date.now().toString().slice(-6);
-    const currentInvNo = activeTransactionNo || `INV-${invoiceTimestamp}`;
-    setLastInvoiceNo(currentInvNo);
-
-    setLastReceiptData({
+    // Receipt snapshot, stored only after the server has saved the sale: otherwise Reprint Bill
+    // could print a receipt for a sale that does not exist.
+    const receiptSnapshot = {
       cart: [...cart],
       cashPaid: finalCashPaid,
-      invoiceNo: currentInvNo,
       orderType: isOverrideGrosir1 ? 'Grosir (Override G1)' : (isGrosirMode ? 'Grosir' : 'Retail'),
       customer: selectedCustomer,
-      paymentMethod: finalPaymentMethod as any,
+      paymentMethod: finalPaymentMethod as PaymentMethod,
       discountAmount: totalDiscount,
       taxAmount,
       serviceAmount,
       saleDate: new Date().toISOString(),
-    });
+    };
 
     try {
       const checkoutPayload = {
@@ -652,7 +650,8 @@ export default function POSClient() {
         res = await fetch(`/api/transactions/active/${activeTransactionIdRef.current}/checkout`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(checkoutPayload),
+          // The cart goes along so the server books what the cashier sees, even if a background item sync was lost
+          body: JSON.stringify({ ...checkoutPayload, items: cart }),
         });
         // 404 means the server has no draft with this id (e.g. a saved id that outlived a database
         // reset), so nothing is booked under it: save the sale from the cart instead of failing every
@@ -681,12 +680,10 @@ export default function POSClient() {
       }
 
       // The server assigns the invoice number; print that one
-      const serverInvoiceNo: string | undefined = json.data?.salesposno;
-      if (serverInvoiceNo) {
-        setLastInvoiceNo(serverInvoiceNo);
-        setLastReceiptData((prev) => (prev ? { ...prev, invoiceNo: serverInvoiceNo } : prev));
-      }
-      
+      const invoiceNo: string = json.data?.salesposno || activeTransactionNo || '-';
+      setLastInvoiceNo(invoiceNo);
+      setLastReceiptData({ ...receiptSnapshot, invoiceNo });
+
       activeTransactionIdRef.current = null;
       setActiveTransactionNo(null);
       setCart([]);
@@ -1038,7 +1035,16 @@ export default function POSClient() {
                             >
                               -
                             </button>
-                            <span className="w-8 text-center font-bold font-mono">{item.quantity}</span>
+                            <QtyInput
+                              value={item.quantity}
+                              onCommit={(qty) => {
+                                // Typed qty is absolute; diff against the latest cart, a scan may have changed it
+                                const current = cartRef.current[originalIdx]?.quantity;
+                                if (current !== undefined) updateQty(originalIdx, qty - current);
+                              }}
+                              onDone={() => searchInputRef.current?.focus()}
+                              className={isDark ? 'border-slate-600' : 'border-slate-300'}
+                            />
                             <button
                               onClick={() => updateQty(originalIdx, 1)}
                               className="cursor-pointer w-6 h-6 rounded flex items-center justify-center bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-black text-xs transition-colors"
@@ -1325,7 +1331,7 @@ export default function POSClient() {
           setSelectedCustomer(null);
         }}
         cart={lastReceiptData?.cart || []}
-        cashierName={currentUser?.name || 'Kasir'}
+        cashierName={currentUser?.displayName || currentUser?.name || 'Kasir'}
         cashPaid={lastReceiptData?.cashPaid || 0}
         invoiceNo={lastReceiptData?.invoiceNo || lastInvoiceNo}
         storeInfo={posSettings}

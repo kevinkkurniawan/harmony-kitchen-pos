@@ -151,42 +151,42 @@ export default function ReceiptModal({
 
         {/* Modal Body / Thermal Receipt View */}
         <div className="p-6 overflow-y-auto font-mono text-sm leading-tight select-none bg-slate-100 flex-1 border-b border-slate-200">
-          <div className="bg-white px-4 py-3 shadow-lg rounded-none border border-slate-300 max-w-[300px] mx-auto receipt-paper text-[#1e40af] font-mono text-xs leading-snug tracking-tight">
+          <div className="bg-white px-4 py-3 shadow-lg rounded-none border border-slate-300 max-w-[300px] mx-auto receipt-paper text-[#1e40af] text-[13px] leading-snug">
             {/* Header Nota */}
             <div className="text-center pt-0 pb-1.5 border-b-2 border-[#1e40af]">
-              <h2 className="font-bold text-sm tracking-wide uppercase text-[#1e40af]">
+              <h2 className="font-bold text-[15px] tracking-wide uppercase text-[#1e40af]">
                 HARMONY KITCHENWARE
               </h2>
-              <p className="text-xs text-[#1e40af] mt-0.5">Jalan Panglima Sudirman 65</p>
-              <p className="text-xs text-[#1e40af]">WA : 0851 7238 4707</p>
+              <p className="text-[13px] text-[#1e40af] mt-0.5">Jalan Panglima Sudirman 65</p>
+              <p className="text-[13px] text-[#1e40af]">WA : 0851 7238 4707</p>
             </div>
 
             {/* Sub Header Nota */}
-            <div className="pt-2 text-xs text-left text-[#1e40af]">No : {invoiceNo}</div>
-            <div className="text-xs flex justify-between text-[#1e40af]">
+            <div className="pt-2 text-[13px] text-left text-[#1e40af]">No : {invoiceNo}</div>
+            <div className="text-[13px] flex justify-between text-[#1e40af]">
               <span>{dateStr}</span>
               <span>{timeStr}</span>
               <span>Ksr : {cashierName}</span>
             </div>
 
             {/* Items Header */}
-            <div className="pt-2 pb-1 text-xs font-bold flex text-[#1e40af]">
-              <span className="w-5 text-left shrink-0">#</span>
+            <div className="pt-2 pb-1 text-[13px] font-bold flex text-[#1e40af]">
+              <span className="w-6 text-left shrink-0">#</span>
               <span className="flex-1 text-left">Barang</span>
               <span className="text-right shrink-0">Sub Total</span>
             </div>
 
             {/* Items List */}
-            <div className="space-y-1.5 text-xs text-[#1e40af]">
+            <div className="space-y-1.5 text-[13px] text-[#1e40af]">
               {validCart.length === 0 ? (
-                <div className="text-center py-4 text-[#1e40af]/60 italic font-sans">
+                <div className="text-center py-4 text-[#1e40af]/60 italic">
                   (Belum ada item)
                 </div>
               ) : (
                 validCart.map((item, idx) => (
                   <div key={idx} className="flex flex-col">
                     <div className="flex items-start font-medium text-[#1e40af]">
-                      <span className="w-5 text-left shrink-0 font-mono">{item.quantity}</span>
+                      <span className="w-6 text-left shrink-0">{item.quantity}</span>
                       <span className="flex-1 pr-3 break-words text-left">
                         {item.product.name}
                       </span>
@@ -195,12 +195,12 @@ export default function ReceiptModal({
                       </span>
                     </div>
                     {item.quantity > 1 && (
-                      <div className="pl-5 text-[#1e40af] text-[11px]">
+                      <div className="pl-6 text-[#1e40af] text-[12px]">
                         @ {Math.round(item.selectedPrice).toLocaleString('en-US')}
                       </div>
                     )}
                     {item.memo && (
-                      <div className="pl-5 text-[11px] text-[#1e40af] font-sans italic">
+                      <div className="pl-6 text-[12px] text-[#1e40af] italic">
                         * Catatan: {item.memo}
                       </div>
                     )}
@@ -210,12 +210,12 @@ export default function ReceiptModal({
             </div>
 
             {/* Summary Details */}
-            <div className="mt-2.5 pt-2 border-t-2 border-[#1e40af] space-y-1 text-xs text-[#1e40af]">
+            <div className="mt-2.5 pt-2 border-t-2 border-[#1e40af] space-y-1 text-[13px] text-[#1e40af]">
               <div className="flex justify-between items-center">
                 <span>{totalKinds} Jenis</span>
                 <div className="flex justify-between w-48">
-                  <span className="flex-1 text-right pr-2 font-mono">Total :</span>
-                  <span className="font-bold text-right shrink-0 min-w-[70px] font-mono">
+                  <span className="flex-1 text-right pr-2">Total :</span>
+                  <span className="font-bold text-right shrink-0 min-w-[70px]">
                     {Math.round(grandTotal).toLocaleString('en-US')}
                   </span>
                 </div>
@@ -224,8 +224,8 @@ export default function ReceiptModal({
               {discountAmount > 0 && (
                 <div className="flex justify-end">
                   <div className="flex justify-between w-48 text-rose-600 font-bold">
-                    <span className="flex-1 text-right pr-2 font-mono">Diskon :</span>
-                    <span className="text-right shrink-0 min-w-[70px] font-mono">
+                    <span className="flex-1 text-right pr-2">Diskon :</span>
+                    <span className="text-right shrink-0 min-w-[70px]">
                       - {Math.round(discountAmount).toLocaleString('en-US')}
                     </span>
                   </div>
@@ -235,8 +235,8 @@ export default function ReceiptModal({
               {taxAmount > 0 && (
                 <div className="flex justify-end">
                   <div className="flex justify-between w-48">
-                    <span className="flex-1 text-right pr-2 font-mono">Pajak :</span>
-                    <span className="text-right shrink-0 min-w-[70px] font-mono">
+                    <span className="flex-1 text-right pr-2">Pajak :</span>
+                    <span className="text-right shrink-0 min-w-[70px]">
                       {Math.round(taxAmount).toLocaleString('en-US')}
                     </span>
                   </div>
@@ -246,8 +246,8 @@ export default function ReceiptModal({
               {serviceAmount > 0 && (
                 <div className="flex justify-end">
                   <div className="flex justify-between w-48">
-                    <span className="flex-1 text-right pr-2 font-mono">Service :</span>
-                    <span className="text-right shrink-0 min-w-[70px] font-mono">
+                    <span className="flex-1 text-right pr-2">Service :</span>
+                    <span className="text-right shrink-0 min-w-[70px]">
                       {Math.round(serviceAmount).toLocaleString('en-US')}
                     </span>
                   </div>
@@ -256,8 +256,8 @@ export default function ReceiptModal({
 
               <div className="flex justify-end">
                 <div className="flex justify-between w-48">
-                  <span className="flex-1 text-right pr-2 font-mono">Jumlah Bayar :</span>
-                  <span className="font-bold text-right shrink-0 min-w-[70px] font-mono">
+                  <span className="flex-1 text-right pr-2">Jumlah Bayar :</span>
+                  <span className="font-bold text-right shrink-0 min-w-[70px]">
                     {Math.round(cashPaid).toLocaleString('en-US')}
                   </span>
                 </div>
@@ -265,8 +265,8 @@ export default function ReceiptModal({
 
               <div className="flex justify-end">
                 <div className="flex justify-between w-48">
-                  <span className="flex-1 text-right pr-2 font-mono">Kembali :</span>
-                  <span className="font-bold text-right shrink-0 min-w-[70px] font-mono">
+                  <span className="flex-1 text-right pr-2">Kembali :</span>
+                  <span className="font-bold text-right shrink-0 min-w-[70px]">
                     {Math.round(change).toLocaleString('en-US')}
                   </span>
                 </div>
@@ -274,16 +274,16 @@ export default function ReceiptModal({
             </div>
 
             {/* Footer Nota (Compact & Tightened) */}
-            <div className="pt-2.5 pb-0 text-center text-xs text-[#1e40af] space-y-1 font-mono">
-              <p className="font-bold uppercase leading-tight text-[11px]">
+            <div className="pt-2.5 pb-0 text-center text-[13px] text-[#1e40af] space-y-1">
+              <p className="font-bold uppercase leading-tight text-[12px]">
                 BARANG YANG SUDAH DIBELI
                 <br />
                 TIDAK DAPAT DIKEMBALIKAN / DITUKARKAN
               </p>
-              <p className="pt-0.5 font-bold uppercase text-[11px]">
+              <p className="pt-0.5 font-bold uppercase text-[12px]">
                 TERIMA KASIH ATAS KUNJUNGAN ANDA
               </p>
-              <p className="text-[10px] font-mono text-[#1e40af]">
+              <p className="text-[11px] text-[#1e40af]">
                 linktr.ee/harmonykitchenware
               </p>
             </div>

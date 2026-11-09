@@ -2,6 +2,8 @@ export interface POSUser {
   id: string;
   username: string;
   name: string;
+  /** Employee full name, printed on receipts; older saved sessions may not have it */
+  displayName?: string;
   role: 'Cashier' | 'Supervisor' | 'Manager';
   password?: string;
   shift?: 'pagi' | 'siang' | 'malam';

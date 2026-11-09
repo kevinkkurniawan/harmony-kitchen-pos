@@ -5,6 +5,8 @@ export const metadata: Metadata = {
   title: 'Harmony Kitchenware POS',
   description: 'Sistem POS Web-Based Harmony Kitchenware',
   manifest: '/manifest.json',
+  // Chrome's auto-translate rewrote the cashier screen and printed receipts in English
+  other: { google: 'notranslate' },
 };
 
 export default function RootLayout({
@@ -13,7 +15,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id">
+    <html lang="id" translate="no" className="notranslate">
       <body className="antialiased bg-slate-950 text-slate-100">
         {children}
         <script
