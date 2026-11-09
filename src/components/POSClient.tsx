@@ -567,6 +567,18 @@ export default function POSClient() {
     })();
   }, [isInitialized, currentUser]);
 
+  // Drops the open draft from memory and from this browser's saved POS state.
+  const forgetActiveTransaction = () => {
+    activeTransactionIdRef.current = null;
+    setActiveTransactionNo(null);
+    try {
+      localStorage.removeItem('hk_pos_transaction_id');
+      localStorage.removeItem('hk_pos_transaction_no');
+    } catch (e) {
+      console.error('Failed to clear the saved transaction:', e);
+    }
+  };
+
   const handleCheckout = async (finalCashPaid: number, finalPaymentMethod: string): Promise<boolean> => {
     if (activeCartItems.length === 0) return false;
 
@@ -623,6 +635,18 @@ export default function POSClient() {
         notes: '',
       };
 
+      // Saves the whole sale from the cart in one request, without a server-side draft
+      const postCartSale = () => fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...checkoutPayload,
+          mode: isGrosirMode ? 'Grosir' : 'Retail',
+          change: changeAmt,
+          items: cart,
+        }),
+      });
+
       let res: Response;
       if (activeTransactionIdRef.current) {
         res = await fetch(`/api/transactions/active/${activeTransactionIdRef.current}/checkout`, {
@@ -630,17 +654,16 @@ export default function POSClient() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(checkoutPayload),
         });
+        // 404 means the server has no draft with this id (e.g. a saved id that outlived a database
+        // reset), so nothing is booked under it: save the sale from the cart instead of failing every
+        // checkout until the cart is cancelled. Other errors keep the id, because the draft may still
+        // exist or be completed already, and saving from the cart could then book the sale twice.
+        if (res.status === 404) {
+          forgetActiveTransaction();
+          res = await postCartSale();
+        }
       } else {
-        res = await fetch('/api/transactions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...checkoutPayload,
-            mode: isGrosirMode ? 'Grosir' : 'Retail',
-            change: changeAmt,
-            items: cart,
-          }),
-        });
+        res = await postCartSale();
       }
 
       const json = await res.json();
