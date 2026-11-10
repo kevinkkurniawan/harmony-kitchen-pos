@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, CheckCircle, CreditCard, Banknote, HelpCircle, Save, Smartphone, QrCode, ShoppingBag, Truck } from 'lucide-react';
 import { PaymentMethod } from '@/types/pos';
+import { AlertDialog } from '@/components/AlertDialog';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ export function PaymentModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Change shown on the success screen; fixed at submit because the saved sale empties the cart (total 0)
   const [settledChange, setSettledChange] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -54,7 +56,7 @@ export function PaymentModal({
 
   const handleSubmit = () => {
     if (method === 'CASH' && numCash < totalAmount) {
-      alert('Nominal cash kurang dari total tagihan.');
+      setNotice('Nominal cash kurang dari total tagihan.');
       return;
     }
     setViewState('CONFIRM');
@@ -352,6 +354,13 @@ export function PaymentModal({
         {viewState === 'CONFIRM' && renderConfirmView()}
         {viewState === 'SUCCESS' && renderSuccessView()}
       </div>
+      <AlertDialog
+        isOpen={notice !== null}
+        onClose={() => setNotice(null)}
+        title="Pembayaran"
+        message={notice || ''}
+        isDark={isDark}
+      />
     </div>
   );
 }
