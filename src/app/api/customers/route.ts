@@ -46,8 +46,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    // Creating members with discounts is an admin action
-    const auth = await verifyPOSCapability('MANAGE_CUSTOMER');
+    // Any logged-in cashier may manage customers (client rule)
+    const auth = await verifyPOSCapability();
     if (auth.errorResponse) return auth.errorResponse;
 
     const body = await request.json();
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const auth = await verifyPOSCapability('MANAGE_CUSTOMER');
+    const auth = await verifyPOSCapability();
     if (auth.errorResponse) return auth.errorResponse;
 
     const { searchParams } = new URL(request.url);
