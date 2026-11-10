@@ -88,16 +88,8 @@ export async function POST(request: Request) {
     const overrideActive = Boolean(isOverrideGrosir || isOverrideGrosir1);
     const rawDiscountValue = Number(manualDiscountValue || manualDiscountAmount || 0);
 
-    // 2. Permission checks
-    if (overrideActive) {
-      const capCheck = await verifyPOSCapability('OVERRIDE_GROSIR_1');
-      if (capCheck.errorResponse) return capCheck.errorResponse;
-    }
-
+    // 2. Every logged-in cashier may override Grosir 1 and give a manual discount (client rule)
     if (rawDiscountValue > 0) {
-      const capCheck = await verifyPOSCapability('MANUAL_DISCOUNT');
-      if (capCheck.errorResponse) return capCheck.errorResponse;
-
       if (!manualDiscountReason || !manualDiscountReason.trim()) {
         return apiError('VALIDATION_ERROR', 'Alasan diskon manual wajib diisi sebelum pembayaran.', 400);
       }

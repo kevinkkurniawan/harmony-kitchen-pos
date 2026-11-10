@@ -88,6 +88,13 @@ export default function POSClient() {
   const [alertMessage, setAlertMessage] = useState('');
   const [alertTitle, setAlertTitle] = useState('Perhatian');
   const [alertConfirmFn, setAlertConfirmFn] = useState<(() => void) | undefined>(undefined);
+  // In-app message dialog, used instead of the browser's native alert()
+  const showNotice = useCallback((title: string, message: string) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertConfirmFn(undefined);
+    setIsAlertOpen(true);
+  }, []);
   const [lastInvoiceNo, setLastInvoiceNo] = useState('');
   
   const activeTransactionIdRef = useRef<number | null>(null);
@@ -117,7 +124,7 @@ export default function POSClient() {
   const [pendingLookups, setPendingLookups] = useState(0);
   const isScanning = pendingLookups > 0;
 
-  const { isConnected, connectPrinter, disconnectPrinter, printText, playBeep } = usePOSHardware();
+  const { isConnected, connectPrinter, disconnectPrinter, printText, playBeep } = usePOSHardware({ onError: (message) => showNotice('Printer', message) });
 
   const fetchProducts = useCallback(async (query = '', showRefreshAnimation = false) => {
     if (showRefreshAnimation) setIsRefreshing(true);
@@ -584,7 +591,7 @@ export default function POSClient() {
     if (activeCartItems.length === 0) return false;
 
     if (manualDiscountValue > 0 && !manualDiscountReason.trim()) {
-      alert('Alasan diskon manual wajib diisi sebelum pembayaran.');
+      showNotice('Diskon Manual', 'Alasan diskon manual wajib diisi sebelum pembayaran.');
       return false;
     }
 
@@ -667,7 +674,7 @@ export default function POSClient() {
 
       const json = await res.json();
       if (res.status === 401) {
-        alert('Sesi kasir telah berakhir. Silakan login kembali, lalu ulangi pembayaran.');
+        showNotice('Sesi Berakhir', 'Sesi kasir telah berakhir. Silakan login kembali, lalu ulangi pembayaran.');
         setIsPaymentModalOpen(false);
         setCurrentUser(null);
         setIsLoginOpen(true);
@@ -675,7 +682,7 @@ export default function POSClient() {
       }
       if (!res.ok || !json.success) {
         const errMsg = json.error?.message || json.error || json.message || 'Gagal memproses transaksi checkout.';
-        alert(`Checkout Gagal: ${errMsg}`);
+        showNotice('Checkout Gagal', String(errMsg));
         return false;
       }
 
@@ -696,7 +703,7 @@ export default function POSClient() {
       return true;
     } catch (e: any) {
       console.error('Failed to post transaction:', e);
-      alert(`Terjadi kesalahan jaringan atau server saat checkout: ${e.message || 'Error'}`);
+      showNotice('Checkout Gagal', `Terjadi kesalahan jaringan atau server saat checkout: ${e.message || 'Error'}`);
       return false;
     }
   };

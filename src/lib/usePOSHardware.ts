@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 
 // ESC/POS commands
 const ESC = '\x1B';
@@ -11,8 +11,17 @@ const LEFT = ESC + 'a' + '\x00';
 const CUT = GS + 'V' + '\x41' + '\x00'; // Partial cut
 const KICK_DRAWER = ESC + 'p' + '\x00' + '\x32' + '\x32'; // Kick cash drawer (pin 2)
 
-export function usePOSHardware() {
+export function usePOSHardware(options: { onError?: (message: string) => void } = {}) {
   const [port, setPort] = useState<unknown>(null);
+  // Ref keeps the latest handler without re-creating the printer callbacks
+  const onErrorRef = useRef(options.onError);
+  useEffect(() => {
+    onErrorRef.current = options.onError;
+  });
+  const reportError = useCallback((message: string) => {
+    if (onErrorRef.current) onErrorRef.current(message);
+    else console.error(message);
+  }, []);
   const [isConnected, setIsConnected] = useState(false);
 
   // Audio Context for Beeps
@@ -58,7 +67,7 @@ export function usePOSHardware() {
 
   const connectPrinter = useCallback(async () => {
     if (!('serial' in navigator)) {
-      alert('WebSerial API tidak didukung di browser ini. Gunakan Chrome/Edge.');
+      reportError('WebSerial API tidak didukung di browser ini. Gunakan Chrome/Edge.');
       return false;
     }
 
@@ -73,7 +82,7 @@ export function usePOSHardware() {
       console.error('Gagal menghubungkan printer:', err);
       return false;
     }
-  }, []);
+  }, [reportError]);
 
   const disconnectPrinter = useCallback(async () => {
     if (port && typeof (port as { close: () => Promise<void> }).close === 'function') {
@@ -111,9 +120,9 @@ export function usePOSHardware() {
       await writer.releaseLock();
     } catch (err) {
       console.error('Gagal mencetak:', err);
-      alert('Gagal mencetak ke printer. Periksa koneksi USB/Serial.');
+      reportError('Gagal mencetak ke printer. Periksa koneksi USB/Serial.');
     }
-  }, [port]);
+  }, [port, reportError]);
 
   const formatStruk = useCallback((lines: string[]) => {
     // Basic ESC/POS formatting builder
