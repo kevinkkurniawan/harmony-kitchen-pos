@@ -1,9 +1,10 @@
 import { prisma } from '@/lib/db';
-import { calculateEffectivePrice } from '@/lib/wholesale-rules';
+import { calculateEffectivePrice, clampItemDiscount } from '@/lib/wholesale-rules';
+import { loadPromoRules } from '@/lib/promo-rules';
 import { verifyPOSCapability } from '@/lib/capabilities';
 import { apiError, apiSuccess } from '@/lib/api-response';
 import { calculateCanonicalSalesTotal } from '@/lib/sales-calculation';
-import { getCustomerDiscountPercent, getTaxRates, getVoucherDiscount } from '@/lib/pos-rules';
+import { getCustomerDiscountPercent, getTaxRates, getVoucherDiscount, isValidPosPin } from '@/lib/pos-rules';
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   try {
@@ -18,7 +19,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       manualDiscountReason,
       customerId,
       voucherCode,
-      isGrosirMode,
       isOverrideGrosir,
       isOverrideGrosir1,
       total,
@@ -26,6 +26,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       cashPaid,
       notes,
       items,
+      pin,
     } = body;
 
     // 1. Authenticate exclusively via cryptographic session cookie
@@ -37,7 +38,12 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const overrideActive = Boolean(isOverrideGrosir || isOverrideGrosir1);
     const rawDiscountValue = Number(manualDiscountValue || manualDiscountAmount || 0);
 
-    // 2. Every logged-in cashier may override Grosir 1 and give a manual discount (client rule)
+    const hasItemDiscount = Array.isArray(items) && items.some((it: { isVoided?: boolean; discount?: unknown }) => !it.isVoided && Number(it.discount) > 0);
+
+    // 2. Override Grosir 1 and manual discounts (bill or per item) need the shared PIN, as in the legacy POS
+    if ((overrideActive || rawDiscountValue > 0 || hasItemDiscount) && !isValidPosPin(pin)) {
+      return apiError('FORBIDDEN', 'PIN otorisasi salah atau belum diisi untuk Override Grosir 1 / potongan manual.', 403);
+    }
     if (rawDiscountValue > 0) {
       if (!manualDiscountReason || !manualDiscountReason.trim()) {
         return apiError('VALIDATION_ERROR', 'Alasan diskon manual wajib diisi sebelum pembayaran.', 400);
@@ -82,13 +88,18 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       // item sync can lose a line and the totals would then never match. Prices are recalculated below
       // from inventory, never taken from the cart. One line per item (unique salesposheaderid+inventoryid).
       if (Array.isArray(items)) {
-        const lines = new Map<number, { qty: number; memo: string | null }>();
-        for (const it of items as { isVoided?: boolean; quantity?: number; memo?: string; product?: { id?: unknown } }[]) {
+        const lines = new Map<number, { qty: number; memo: string | null; disc: number }>();
+        for (const it of items as { isVoided?: boolean; quantity?: number; memo?: string; discount?: unknown; product?: { id?: unknown } }[]) {
           const inventoryId = Number(it.product?.id);
           const qty = Number(it.quantity || 0);
           if (it.isVoided || !(qty > 0) || !(inventoryId > 0)) continue;
           const line = lines.get(inventoryId);
-          lines.set(inventoryId, { qty: (line?.qty || 0) + qty, memo: line?.memo || it.memo || null });
+          lines.set(inventoryId, {
+            qty: (line?.qty || 0) + qty,
+            memo: line?.memo || it.memo || null,
+            // Per-pcs potongan; capped at the unit price below, once the price is known
+            disc: Math.max(line?.disc || 0, Math.round(Number(it.discount) || 0)),
+          });
         }
         await tx.t_salesposdetail.deleteMany({ where: { salesposheaderid: transactionId } });
         await tx.t_salesposdetail.createMany({
@@ -97,6 +108,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
             inventoryid: inventoryId,
             qty: line.qty,
             price: 0,
+            disc: line.disc,
             subtotal: 0,
             remarks: line.memo,
             createduser: cashierName,
@@ -129,15 +141,13 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       });
       const invMap = new Map(inventories.map((i) => [i.id, i]));
 
-      const wholesaleCategories = await tx.m_wholesalecategory.findMany();
-      const wcMap = new Map(wholesaleCategories.map((wc) => [wc.id, wc]));
+      const promoRules = await loadPromoRules(tx);
 
       let recomputedSubtotal = 0;
       const updatedItemSnapshots = [];
 
       for (const item of details) {
         const inv = invMap.get(Number(item.inventoryid));
-        const wc = inv?.wholesalecategoryid ? wcMap.get(inv.wholesalecategoryid) : null;
         const itemQty = Number(item.qty || 1);
 
         // Server-side authoritative revalidation of effective price
@@ -147,15 +157,15 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
             grosir1: inv?.grosir1 ? Number(inv.grosir1) : null,
             grosir2: inv?.grosir2 ? Number(inv.grosir2) : null,
             grosir3: inv?.grosir3 ? Number(inv.grosir3) : null,
-            // Tiered wholesale prices only apply in Grosir mode, matching the cashier screen
-            wholesaleCategory: isGrosirMode ? wc : null,
+            promoRules: promoRules.get(Number(inv?.promobundle)) || null,
           },
           itemQty,
           overrideActive
         );
 
-        const itemDisc = Number(item.disc || 0);
-        const lineSubtotal = Math.max(0, calc.effectivePrice * itemQty - itemDisc);
+        // disc is per pcs, as the legacy POS stores it: subtotal = qty * (price - disc)
+        const itemDisc = clampItemDiscount(item.disc, calc.effectivePrice);
+        const lineSubtotal = (calc.effectivePrice - itemDisc) * itemQty;
         recomputedSubtotal += lineSubtotal;
 
         const unitHpp = Number(inv?.hpp || 0);
@@ -166,13 +176,12 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
           detailId: item.id,
           inventoryId: item.inventoryid,
           price: calc.effectivePrice,
+          disc: itemDisc,
           subtotal: lineSubtotal,
           unitHpp,
           totalHpp,
           hppProvenance,
           priceSource: calc.priceSource,
-          wholesaleCategoryId: calc.wholesaleCategoryId || null,
-          wholesaleVersion: calc.wholesaleVersion || null,
           wholesaleTier: calc.tier || null,
           itemQty,
           inv,
@@ -203,13 +212,12 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
           where: { id: snap.detailId },
           data: {
             price: snap.price,
+            disc: snap.disc,
             subtotal: snap.subtotal,
             unithpp: snap.unitHpp,
             totalhpp: snap.totalHpp,
             hppprovenance: snap.hppProvenance,
             pricesource: snap.priceSource,
-            wholesalecategoryid: snap.wholesaleCategoryId,
-            wholesaleversion: snap.wholesaleVersion,
             wholesaletier: snap.wholesaleTier,
             issync: true,
             syncdate: new Date(),
@@ -242,7 +250,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
           manualdiscountreason: rawDiscountValue > 0 ? manualDiscountReason?.trim() : null,
           manualdiscountuser: rawDiscountValue > 0 ? cashierName : null,
           paymenttypecode: paymentMethod || 'CASH',
-          isgrosir: Boolean(isGrosirMode),
+          // Legacy meaning: the sale ran in reseller mode (everything at grosir 1)
+          isgrosir: overrideActive,
           customerid: effectiveCustomerId || null,
         },
       });

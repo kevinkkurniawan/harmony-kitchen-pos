@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { calculateCanonicalSalesTotal } from '../src/lib/sales-calculation';
-import { calculateEffectivePrice } from '../src/lib/wholesale-rules';
+import { calculateEffectivePrice, clampItemDiscount, PromoRule, WholesaleItemPrices } from '../src/lib/wholesale-rules';
 
 describe('POS Canonical Sales Calculation Suite', () => {
   it('Plain retail item calculation without discounts', () => {
@@ -73,31 +73,54 @@ describe('POS Canonical Sales Calculation Suite', () => {
     assert.strictEqual(result.grandTotal, 0);
   });
 
-  it('Wholesale tier rule calculation matching categories', () => {
-    const category = {
-      id: 1,
-      tier1_minqty: 5,
-      tier2_minqty: 10,
-      tier3_minqty: 20,
-    };
+  // K bands as in prod m_promo; prices of "Edelmann Essen Dinner Knife"
+  const K1: PromoRule[] = [
+    { tier: 3, qtyMin: 12, qtyMax: 59 },
+    { tier: 2, qtyMin: 60, qtyMax: 119 },
+    { tier: 1, qtyMin: 120, qtyMax: 999 },
+  ];
+  const K2: PromoRule[] = [
+    { tier: 3, qtyMin: 6, qtyMax: 29 },
+    { tier: 2, qtyMin: 30, qtyMax: 60 },
+    { tier: 1, qtyMin: 61, qtyMax: 999 },
+  ];
+  const K3: PromoRule[] = [{ tier: 3, qtyMin: 3, qtyMax: 12 }];
+  const knife = { price: 32000, grosir1: 28000, grosir2: 30000, grosir3: 31000 };
+  const price = (item: WholesaleItemPrices, qty: number, override = false) => calculateEffectivePrice(item, qty, override).effectivePrice;
 
-    const item = {
-      price: 100000,
-      grosir1: 95000,
-      grosir2: 90000,
-      grosir3: 85000,
-      wholesaleCategory: category,
-    };
+  it('K1 bands: 12 pcs grosir 3, 60 pcs grosir 2, 120 pcs grosir 1', () => {
+    const item = { ...knife, promoRules: K1 };
+    assert.strictEqual(price(item, 11), 32000);
+    assert.strictEqual(price(item, 12), 31000);
+    assert.strictEqual(price(item, 59), 31000);
+    assert.strictEqual(price(item, 60), 30000);
+    assert.strictEqual(price(item, 119), 30000);
+    assert.strictEqual(price(item, 120), 28000);
+    assert.strictEqual(calculateEffectivePrice(item, 120).priceSource, 'GROSIR_1');
+  });
 
-    // Retail (qty 4)
-    assert.strictEqual(calculateEffectivePrice(item, 4, false).effectivePrice, 100000);
-    // Tier 1 (qty 5)
-    assert.strictEqual(calculateEffectivePrice(item, 5, false).effectivePrice, 95000);
-    // Tier 2 (qty 12)
-    assert.strictEqual(calculateEffectivePrice(item, 12, false).effectivePrice, 90000);
-    // Tier 3 (qty 25)
-    assert.strictEqual(calculateEffectivePrice(item, 25, false).effectivePrice, 85000);
-    // Override Grosir 1 (qty 2 with override active)
-    assert.strictEqual(calculateEffectivePrice(item, 2, true).effectivePrice, 95000);
+  it('K2 bands and K3 above its last band stays retail, like the legacy POS', () => {
+    assert.strictEqual(price({ ...knife, promoRules: K2 }, 6), 31000);
+    assert.strictEqual(price({ ...knife, promoRules: K2 }, 61), 28000);
+    assert.strictEqual(price({ ...knife, promoRules: K3 }, 12), 31000);
+    assert.strictEqual(price({ ...knife, promoRules: K3 }, 13), 32000);
+  });
+
+  it('No K category, or a grosir price not set, stays retail', () => {
+    assert.strictEqual(price({ ...knife, promoRules: null }, 500), 32000);
+    assert.strictEqual(price({ ...knife, grosir3: 0, promoRules: K1 }, 12), 32000);
+  });
+
+  it('Override Grosir 1 prices any qty at grosir 1, retail when grosir 1 is not set', () => {
+    assert.strictEqual(price({ ...knife, promoRules: K1 }, 1, true), 28000);
+    assert.strictEqual(calculateEffectivePrice({ ...knife, grosir1: 0 }, 1, true).priceSource, 'RETAIL');
+  });
+
+  it('Per-pcs potongan is a whole Rupiah between 0 and the unit price', () => {
+    assert.strictEqual(clampItemDiscount(2000, 30000), 2000);
+    assert.strictEqual(clampItemDiscount(-5, 30000), 0);
+    assert.strictEqual(clampItemDiscount(40000, 30000), 30000);
+    assert.strictEqual(clampItemDiscount('abc', 30000), 0);
+    assert.strictEqual(clampItemDiscount(1999.6, 30000), 2000);
   });
 });

@@ -1,12 +1,4 @@
-export interface WholesaleCategoryRule {
-  id: number;
-  code: string;
-  name: string;
-  version: number;
-  tier1_minqty: number;
-  tier2_minqty: number;
-  tier3_minqty: number;
-}
+import type { PromoRule } from '@/lib/wholesale-rules';
 
 export interface Product {
   id: string;
@@ -19,8 +11,8 @@ export interface Product {
   priceGrosir1: number;
   priceGrosir2: number;
   priceGrosir3: number;
-  wholesalecategoryid?: number | null;
-  wholesaleCategory?: WholesaleCategoryRule | null;
+  /** Qty bands of the item's K category (m_promo), null when it has none */
+  promoRules?: PromoRule[] | null;
   printerTarget?: 'Cashier' | 'Pantry' | 'LX300';
   image?: string;
 }
@@ -30,6 +22,8 @@ export interface CartItem {
   quantity: number;
   selectedPrice: number;
   priceType: 'retail' | 'grosir1' | 'grosir2' | 'grosir3' | 'override_grosir1';
+  /** Manual potongan per pcs (Rp), unlocked by the PIN */
+  discount?: number;
   memo?: string;
   isVoided?: boolean;
   voidReason?: string;

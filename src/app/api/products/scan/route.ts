@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { loadPromoRules } from '@/lib/promo-rules';
 
 export async function GET(request: Request) {
   try {
@@ -55,9 +56,11 @@ export async function GET(request: Request) {
       uom: inventory.m_uom?.uomname || 'Pcs',
       priceRetail: Number(inventory.price || 0),
       stock: Number(inventory.stokupdate || 0),
-      priceGrosir1: Number(inventory.grosir1 || inventory.price || 0),
-      priceGrosir2: Number(inventory.grosir2 || inventory.price || 0),
-      priceGrosir3: Number(inventory.grosir3 || inventory.price || 0),
+      // 0 = not set (falls back to retail), the same reading as checkout
+      priceGrosir1: Number(inventory.grosir1 || 0),
+      priceGrosir2: Number(inventory.grosir2 || 0),
+      priceGrosir3: Number(inventory.grosir3 || 0),
+      promoRules: (await loadPromoRules(prisma)).get(Number(inventory.promobundle)) || null,
       printerTarget: 'Cashier'
     };
 

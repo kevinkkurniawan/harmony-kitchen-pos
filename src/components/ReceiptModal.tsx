@@ -47,7 +47,9 @@ export default function ReceiptModal({
 
   const validCart = cart.filter((item) => !item.isVoided);
   const totalKinds = validCart.length;
-  const rawSubtotal = validCart.reduce((sum, item) => sum + item.selectedPrice * item.quantity, 0);
+  // Line total after the per-pcs potongan, as the server books it
+  const lineTotal = (item: CartItem) => (item.selectedPrice - (item.discount || 0)) * item.quantity;
+  const rawSubtotal = validCart.reduce((sum, item) => sum + lineTotal(item), 0);
   const grandTotal = Math.max(0, rawSubtotal - discountAmount) + taxAmount + serviceAmount;
   const change = Math.max(0, cashPaid - grandTotal);
 
@@ -84,13 +86,14 @@ export default function ReceiptModal({
       str += '--------------------------------\n';
       
       validCart.forEach(item => {
-        const lineTotal = Math.round(item.selectedPrice * item.quantity).toLocaleString('en-US');
+        const totalStr = Math.round(lineTotal(item)).toLocaleString('en-US');
         str += `${item.product.name}\n`;
-        str += `${item.quantity} x ${Math.round(item.selectedPrice).toLocaleString('en-US')}`;
-        // Add spaces to right align total
         const leftPart = `${item.quantity} x ${Math.round(item.selectedPrice).toLocaleString('en-US')}`;
-        const spaces = Math.max(1, 32 - leftPart.length - lineTotal.length);
-        str += ' '.repeat(spaces) + lineTotal + '\n';
+        // Pad to right-align the line total on the 32-column paper
+        str += leftPart + ' '.repeat(Math.max(1, 32 - leftPart.length - totalStr.length)) + totalStr + '\n';
+        if (item.discount) {
+          str += ` Potongan @ ${Math.round(item.discount).toLocaleString('en-US')}\n`;
+        }
         if (item.memo) {
           str += ` * ${item.memo}\n`;
         }
@@ -191,12 +194,13 @@ export default function ReceiptModal({
                         {item.product.name}
                       </span>
                       <span className="whitespace-nowrap font-bold text-right shrink-0">
-                        {Math.round(item.selectedPrice * item.quantity).toLocaleString('en-US')}
+                        {Math.round(lineTotal(item)).toLocaleString('en-US')}
                       </span>
                     </div>
-                    {item.quantity > 1 && (
+                    {(item.quantity > 1 || !!item.discount) && (
                       <div className="pl-6 text-[#1e40af] text-[12px]">
                         @ {Math.round(item.selectedPrice).toLocaleString('en-US')}
+                        {!!item.discount && ` - Pot. ${Math.round(item.discount).toLocaleString('en-US')}`}
                       </div>
                     )}
                     {item.memo && (

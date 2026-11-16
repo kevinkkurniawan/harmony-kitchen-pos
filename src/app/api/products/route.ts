@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { loadPromoRules } from '@/lib/promo-rules';
 
 export async function GET(request: Request) {
   try {
@@ -9,14 +10,16 @@ export async function GET(request: Request) {
 
     const whereCondition: any = {};
     if (query) {
+      // Name matches when it has every typed word in any order ("jawa dandang 45" → "Jawa Dandang Ekonomi 45cm")
+      const words = query.split(/\s+/);
       whereCondition.OR = [
-        { inventoryname: { contains: query, mode: 'insensitive' } },
+        { AND: words.map((word) => ({ inventoryname: { contains: word, mode: 'insensitive' } })) },
         { barcode: { contains: query } },
         { inventoryno: { contains: query } }
       ];
     }
 
-    const [inventories, wholesaleCategories] = await Promise.all([
+    const [inventories, promoRules] = await Promise.all([
       prisma.inventory.findMany({
         where: whereCondition,
         orderBy: { inventoryname: 'asc' },
@@ -25,13 +28,10 @@ export async function GET(request: Request) {
           m_uom: true,
         },
       }),
-      prisma.m_wholesalecategory.findMany(),
+      loadPromoRules(prisma),
     ]);
 
-    const wcMap = new Map(wholesaleCategories.map((wc) => [wc.id, wc]));
-
     const products = inventories.map((inv) => {
-      const wc = inv.wholesalecategoryid ? wcMap.get(inv.wholesalecategoryid) : null;
       return {
         id: inv.id.toString(),
         name: inv.inventoryname || 'Unknown',
@@ -40,21 +40,11 @@ export async function GET(request: Request) {
         uom: inv.m_uom?.uomname || 'Pcs',
         priceRetail: Number(inv.price || 0),
         stock: Number(inv.stokupdate || 0),
-        priceGrosir1: Number(inv.grosir1 || inv.price || 0),
-        priceGrosir2: Number(inv.grosir2 || inv.price || 0),
-        priceGrosir3: Number(inv.grosir3 || inv.price || 0),
-        wholesalecategoryid: inv.wholesalecategoryid,
-        wholesaleCategory: wc
-          ? {
-              id: wc.id,
-              code: wc.code,
-              name: wc.name,
-              version: wc.version,
-              tier1_minqty: wc.tier1_minqty,
-              tier2_minqty: wc.tier2_minqty,
-              tier3_minqty: wc.tier3_minqty,
-            }
-          : null,
+        // 0 = not set (falls back to retail), the same reading as checkout
+        priceGrosir1: Number(inv.grosir1 || 0),
+        priceGrosir2: Number(inv.grosir2 || 0),
+        priceGrosir3: Number(inv.grosir3 || 0),
+        promoRules: promoRules.get(Number(inv.promobundle)) || null,
         printerTarget: 'Cashier',
       };
     });

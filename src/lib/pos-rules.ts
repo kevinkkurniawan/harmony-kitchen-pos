@@ -33,6 +33,14 @@ export function getVoucherDiscount(code: string | null | undefined): number {
   return VOUCHERS[(code || '').trim().toUpperCase()] || 0;
 }
 
+// The legacy POS's one shared passcode (Frm_MemberValidation); the POS_PIN env var overrides it
+const POS_PIN = process.env.POS_PIN || '1212';
+
+/** Shared cashier PIN that unlocks Override Grosir 1 and manual discounts, as in the legacy POS. */
+export function isValidPosPin(pin: unknown): boolean {
+  return typeof pin === 'string' && pin === POS_PIN;
+}
+
 function envPercent(name: string): number {
   const value = Number(process.env[name] || 0);
   return Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : 0;

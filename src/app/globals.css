@@ -78,15 +78,15 @@ body {
   /* With zero page margins the receipt spans the full paper width, but thermal
      printers only print the middle of it (72mm of 80mm, 48mm of 58mm), so the
      edges were cut off ("192,000" printed as "192,0"). The store's printer still
-     cut ~2 characters on the left with 5mm (qty column, "4 Jenis"), so the left
-     side gets 9mm; the right side printed fine with 5mm. */
+     cut ~2 characters on the left with 5mm (qty column, "4 Jenis") and 9mm pushed
+     the receipt too far right, so the left side gets 7mm; the right side keeps 5mm. */
   .receipt-paper {
     position: static;
     page-break-inside: avoid;
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
-    padding: 1.5mm 5mm 1.5mm 9mm !important;
+    padding: 1.5mm 5mm 1.5mm 7mm !important;
     box-shadow: none !important;
     border: none !important;
   }

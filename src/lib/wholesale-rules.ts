@@ -1,13 +1,8 @@
-export interface WholesaleCategoryRule {
-  id: number;
-  code: string;
-  name: string;
-  description?: string | null;
-  isactive: boolean;
-  version: number;
-  tier1_minqty: number;
-  tier2_minqty: number;
-  tier3_minqty: number;
+/** One qty band of an item's price category (K1, K2, ...), from m_promo. */
+export interface PromoRule {
+  tier: 1 | 2 | 3;
+  qtyMin: number;
+  qtyMax: number;
 }
 
 export interface WholesaleItemPrices {
@@ -15,40 +10,23 @@ export interface WholesaleItemPrices {
   grosir1?: number | null;
   grosir2?: number | null;
   grosir3?: number | null;
-  wholesaleCategory?: {
-    id?: number;
-    code?: string;
-    version?: number;
-    tier1_minqty: number;
-    tier2_minqty: number;
-    tier3_minqty: number;
-  } | null;
+  /** Qty bands of the item's K category; none means the item never gets a grosir price on its own */
+  promoRules?: PromoRule[] | null;
 }
 
 export interface EffectivePriceResult {
   effectivePrice: number;
   priceSource: 'RETAIL' | 'GROSIR_1' | 'GROSIR_2' | 'GROSIR_3' | 'OVERRIDE_GROSIR_1';
   tier?: 1 | 2 | 3;
-  wholesaleCategoryId?: number;
-  wholesaleVersion?: number;
   isOverrideApplied?: boolean;
 }
 
-export function validateWholesaleThresholds(tier1: number, tier2: number, tier3: number): string | null {
-  if (tier1 <= 0) {
-    return 'Threshold Tier 1 harus berupa bilangan positif (> 0).';
-  }
-  if (tier2 <= tier1) {
-    return 'Threshold Tier 2 harus lebih besar dari Tier 1.';
-  }
-  if (tier3 <= tier2) {
-    return 'Threshold Tier 3 harus lebih besar dari Tier 2.';
-  }
-  return null;
-}
-
 /**
- * Pure wholesale tier calculator matching the ERP/POS contract exactly.
+ * Unit price of one cart line, matching the legacy POS (sp_SPSalesPOSDetail_CalculateDiscount):
+ * - Override Grosir 1 (reseller mode) prices every item at grosir 1.
+ * - Otherwise the line qty picks the band of the item's K category (qtyMin..qtyMax, inclusive);
+ *   a qty outside every band, like K3 above 12 pcs, stays at the retail price.
+ * A grosir price of 0 or empty means "not set" and falls back to retail.
  */
 export function calculateEffectivePrice(
   item: WholesaleItemPrices,
@@ -56,67 +34,24 @@ export function calculateEffectivePrice(
   isCartOverrideGrosir1 = false
 ): EffectivePriceResult {
   const retailPrice = Number(item.price) || 0;
-  const g1 = item.grosir1 !== null && item.grosir1 !== undefined ? Number(item.grosir1) : null;
-  const g2 = item.grosir2 !== null && item.grosir2 !== undefined ? Number(item.grosir2) : null;
-  const g3 = item.grosir3 !== null && item.grosir3 !== undefined ? Number(item.grosir3) : null;
+  const grosir = { 1: Number(item.grosir1) || 0, 2: Number(item.grosir2) || 0, 3: Number(item.grosir3) || 0 };
 
-  // 1. Handle Override Grosir 1
   if (isCartOverrideGrosir1) {
-    if (g1 !== null && g1 > 0) {
-      return {
-        effectivePrice: g1,
-        priceSource: 'OVERRIDE_GROSIR_1',
-        tier: 1,
-        wholesaleCategoryId: item.wholesaleCategory?.id,
-        wholesaleVersion: item.wholesaleCategory?.version,
-        isOverrideApplied: true,
-      };
-    }
-    // Ineligible item fallback to retail
-    return {
-      effectivePrice: retailPrice,
-      priceSource: 'RETAIL',
-      isOverrideApplied: false,
-    };
+    return grosir[1] > 0
+      ? { effectivePrice: grosir[1], priceSource: 'OVERRIDE_GROSIR_1', tier: 1, isOverrideApplied: true }
+      : { effectivePrice: retailPrice, priceSource: 'RETAIL', isOverrideApplied: false };
   }
 
-  // 2. Normal Tier Evaluation based on Wholesale Category thresholds
-  const rule = item.wholesaleCategory;
-  if (rule && qty > 0) {
-    if (rule.tier3_minqty > 0 && qty >= rule.tier3_minqty && g3 !== null && g3 > 0) {
-      return {
-        effectivePrice: g3,
-        priceSource: 'GROSIR_3',
-        tier: 3,
-        wholesaleCategoryId: rule.id,
-        wholesaleVersion: rule.version,
-      };
-    }
-
-    if (rule.tier2_minqty > 0 && qty >= rule.tier2_minqty && g2 !== null && g2 > 0) {
-      return {
-        effectivePrice: g2,
-        priceSource: 'GROSIR_2',
-        tier: 2,
-        wholesaleCategoryId: rule.id,
-        wholesaleVersion: rule.version,
-      };
-    }
-
-    if (rule.tier1_minqty > 0 && qty >= rule.tier1_minqty && g1 !== null && g1 > 0) {
-      return {
-        effectivePrice: g1,
-        priceSource: 'GROSIR_1',
-        tier: 1,
-        wholesaleCategoryId: rule.id,
-        wholesaleVersion: rule.version,
-      };
-    }
+  const band = qty > 0 ? item.promoRules?.find((r) => qty >= r.qtyMin && qty <= r.qtyMax) : undefined;
+  if (band && grosir[band.tier] > 0) {
+    return { effectivePrice: grosir[band.tier], priceSource: `GROSIR_${band.tier}`, tier: band.tier };
   }
 
-  // 3. Fallback to Retail Price
-  return {
-    effectivePrice: retailPrice,
-    priceSource: 'RETAIL',
-  };
+  return { effectivePrice: retailPrice, priceSource: 'RETAIL' };
+}
+
+/** Per-pcs manual discount of a line, kept between 0 and the unit price (whole Rupiah). */
+export function clampItemDiscount(discount: unknown, unitPrice: number): number {
+  const value = Math.round(Number(discount) || 0);
+  return Math.min(Math.max(0, value), Math.max(0, unitPrice));
 }

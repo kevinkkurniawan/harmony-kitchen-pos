@@ -29,6 +29,8 @@ import QtyInput from '@/components/QtyInput';
 import LoginModal from '@/components/LoginModal';
 import ItemMemoModal from '@/components/ItemMemoModal';
 import VoidReasonModal from '@/components/VoidReasonModal';
+import PinModal from '@/components/PinModal';
+import ItemDiscountModal from '@/components/ItemDiscountModal';
 import MemberValidationModal from '@/components/MemberValidationModal';
 import CashierSummaryModal from '@/components/CashierSummaryModal';
 import SettingsModal from '@/components/SettingsModal';
@@ -49,8 +51,11 @@ export default function POSClient() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [theme, setTheme] = useState<'dark' | 'light'>('light');
-  const [isGrosirMode, setIsGrosirMode] = useState(false);
   const [isOverrideGrosir1, setIsOverrideGrosir1] = useState(false);
+  // PIN accepted for the current sale: unlocks Override Grosir 1 and manual discounts, cleared when the sale ends
+  const [authPin, setAuthPin] = useState<string | null>(null);
+  const [pinRequest, setPinRequest] = useState<{ title: string; onSuccess: (pin: string) => void } | null>(null);
+  const [discountItem, setDiscountItem] = useState<CartItem | null>(null);
 
   // Manual Invoice Discount State
   const [manualDiscountType, setManualDiscountType] = useState<'NOMINAL' | 'PERCENT'>('NOMINAL');
@@ -161,45 +166,23 @@ export default function POSClient() {
     return () => clearInterval(timer);
   }, []);
 
-  // Helper to compute effective item price using wholesale rules
-  const computeItemPricing = useCallback((product: Product, quantity: number, override: boolean, grosir: boolean) => {
-    if (override) {
-      const calc = calculateEffectivePrice(
-        {
-          price: product.priceRetail,
-          grosir1: product.priceGrosir1,
-          grosir2: product.priceGrosir2,
-          grosir3: product.priceGrosir3,
-          wholesaleCategory: product.wholesaleCategory,
-        },
-        quantity,
-        true
-      );
-      return { selectedPrice: calc.effectivePrice, priceType: 'override_grosir1' as const };
-    }
-
-    if (grosir) {
-      const calc = calculateEffectivePrice(
-        {
-          price: product.priceRetail,
-          grosir1: product.priceGrosir1,
-          grosir2: product.priceGrosir2,
-          grosir3: product.priceGrosir3,
-          wholesaleCategory: product.wholesaleCategory,
-        },
-        quantity,
-        false
-      );
-
-      let priceType: CartItem['priceType'] = 'retail';
-      if (calc.tier === 1) priceType = 'grosir1';
-      else if (calc.tier === 2) priceType = 'grosir2';
-      else if (calc.tier === 3) priceType = 'grosir3';
-
-      return { selectedPrice: calc.effectivePrice, priceType };
-    }
-
-    return { selectedPrice: product.priceRetail, priceType: 'retail' as const };
+  // Unit price of a line: Override Grosir 1, else the item's K category band for this qty (same rule as checkout)
+  const computeItemPricing = useCallback((product: Product, quantity: number, override: boolean) => {
+    const calc = calculateEffectivePrice(
+      {
+        price: product.priceRetail,
+        grosir1: product.priceGrosir1,
+        grosir2: product.priceGrosir2,
+        grosir3: product.priceGrosir3,
+        promoRules: product.promoRules,
+      },
+      quantity,
+      override
+    );
+    const priceType: CartItem['priceType'] = calc.priceSource === 'OVERRIDE_GROSIR_1'
+      ? 'override_grosir1'
+      : calc.tier ? (`grosir${calc.tier}` as CartItem['priceType']) : 'retail';
+    return { selectedPrice: calc.effectivePrice, priceType };
   }, []);
 
   // Restore persistent state from localStorage on mount
@@ -212,13 +195,18 @@ export default function POSClient() {
       }
 
       const savedCart = localStorage.getItem('hk_pos_cart');
-      if (savedCart) setCart(JSON.parse(savedCart));
+      // Override is off after a reload, so lines saved at Grosir 1 go back to their normal price
+      if (savedCart) {
+        setCart((JSON.parse(savedCart) as CartItem[]).map((item) => {
+          if (item.priceType !== 'override_grosir1') return item;
+          const { selectedPrice, priceType } = computeItemPricing(item.product, item.quantity, false);
+          return { ...item, selectedPrice, priceType, discount: Math.min(item.discount || 0, selectedPrice) };
+        }));
+      }
 
-      const savedMode = localStorage.getItem('hk_pos_grosir_mode');
-      if (savedMode !== null) setIsGrosirMode(JSON.parse(savedMode));
-
-      const savedOverride = localStorage.getItem('hk_pos_override_grosir');
-      if (savedOverride !== null) setIsOverrideGrosir1(JSON.parse(savedOverride));
+      // Override Grosir 1 is per sale and needs the PIN, so it is no longer kept across reloads
+      localStorage.removeItem('hk_pos_grosir_mode');
+      localStorage.removeItem('hk_pos_override_grosir');
 
       const savedCustomer = localStorage.getItem('hk_pos_customer');
       if (savedCustomer) setSelectedCustomer(JSON.parse(savedCustomer));
@@ -233,7 +221,7 @@ export default function POSClient() {
     } finally {
       setIsInitialized(true);
     }
-  }, []);
+  }, [computeItemPricing]);
 
   // Sync state to localStorage
   useEffect(() => {
@@ -246,16 +234,6 @@ export default function POSClient() {
     if (!isInitialized) return;
     localStorage.setItem('hk_pos_cart', JSON.stringify(cart));
   }, [cart, isInitialized]);
-
-  useEffect(() => {
-    if (!isInitialized) return;
-    localStorage.setItem('hk_pos_grosir_mode', JSON.stringify(isGrosirMode));
-  }, [isGrosirMode, isInitialized]);
-
-  useEffect(() => {
-    if (!isInitialized) return;
-    localStorage.setItem('hk_pos_override_grosir', JSON.stringify(isOverrideGrosir1));
-  }, [isOverrideGrosir1, isInitialized]);
 
   useEffect(() => {
     if (!isInitialized) return;
@@ -278,30 +256,44 @@ export default function POSClient() {
     }
   }, [activeTransactionNo, isInitialized]);
 
-  // Recalculate cart prices when Grosir Mode or Override Grosir changes
-  const applyPricingToCart = useCallback((override: boolean, grosir: boolean) => {
+  // Recalculate cart prices when Override Grosir 1 changes; a potongan never exceeds the new price
+  const applyPricingToCart = useCallback((override: boolean) => {
     setCart((prevCart) =>
       prevCart.map((item) => {
-        const { selectedPrice, priceType } = computeItemPricing(item.product, item.quantity, override, grosir);
-        return {
-          ...item,
-          selectedPrice,
-          priceType,
-        };
+        const { selectedPrice, priceType } = computeItemPricing(item.product, item.quantity, override);
+        return { ...item, selectedPrice, priceType, discount: Math.min(item.discount || 0, selectedPrice) };
       })
     );
   }, [computeItemPricing]);
 
-  const handleToggleGrosir = () => {
-    const nextGrosir = !isGrosirMode;
-    setIsGrosirMode(nextGrosir);
-    applyPricingToCart(isOverrideGrosir1, nextGrosir);
+  // Runs the action now if the PIN was already given for this sale, otherwise asks for it first
+  const withPin = (title: string, action: () => void) => {
+    if (authPin) {
+      action();
+      return;
+    }
+    setPinRequest({
+      title,
+      onSuccess: (pin) => {
+        setAuthPin(pin);
+        setPinRequest(null);
+        action();
+      },
+    });
   };
 
   const handleToggleOverrideGrosir1 = () => {
-    const nextOverride = !isOverrideGrosir1;
-    setIsOverrideGrosir1(nextOverride);
-    applyPricingToCart(nextOverride, isGrosirMode);
+    const apply = (next: boolean) => {
+      setIsOverrideGrosir1(next);
+      applyPricingToCart(next);
+    };
+    if (isOverrideGrosir1) apply(false);
+    else withPin('PIN Override Grosir 1', () => apply(true));
+  };
+
+  const handleSaveItemDiscount = (target: CartItem, discount: number) => {
+    setCart((prevCart) => prevCart.map((item) => (item === target ? { ...item, discount } : item)));
+    setDiscountItem(null);
   };
 
   // Add Item to Cart
@@ -315,7 +307,7 @@ export default function POSClient() {
       newQty = prevCart[existingIndex].quantity + scanQty;
     }
 
-    const { selectedPrice, priceType } = computeItemPricing(product, newQty, isOverrideGrosir1, isGrosirMode);
+    const { selectedPrice, priceType } = computeItemPricing(product, newQty, isOverrideGrosir1);
 
     let nextCart: CartItem[];
     if (existingIndex > -1) {
@@ -325,6 +317,7 @@ export default function POSClient() {
         quantity: newQty,
         selectedPrice,
         priceType,
+        discount: Math.min(nextCart[existingIndex].discount || 0, selectedPrice),
       };
     } else {
       nextCart = [
@@ -359,7 +352,6 @@ export default function POSClient() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 ...itemPayload,
-                isGrosirMode,
                 customerId: selectedCustomer?.id || null,
               })
             });
@@ -388,14 +380,14 @@ export default function POSClient() {
     })();
 
     setScanQty(1);
-  }, [isGrosirMode, isOverrideGrosir1, computeItemPricing, playBeep, scanQty, currentUser, selectedCustomer]);
+  }, [isOverrideGrosir1, computeItemPricing, playBeep, scanQty, currentUser, selectedCustomer]);
 
   const updateQty = (index: number, delta: number) => {
     const updated = [...cartRef.current];
     if (!updated[index]) return;
     const newQty = updated[index].quantity + delta;
     const product = updated[index].product;
-    const { selectedPrice, priceType } = computeItemPricing(product, Math.max(newQty, 1), isOverrideGrosir1, isGrosirMode);
+    const { selectedPrice, priceType } = computeItemPricing(product, Math.max(newQty, 1), isOverrideGrosir1);
 
     // Sync before the early-exit below: quantity 0 makes the server delete the line,
     // otherwise a removed item stays in the transaction and checkout totals mismatch.
@@ -427,6 +419,7 @@ export default function POSClient() {
         quantity: newQty,
         selectedPrice,
         priceType,
+        discount: Math.min(updated[index].discount || 0, selectedPrice),
       };
       nextCart = updated;
     }
@@ -460,11 +453,13 @@ export default function POSClient() {
             return;
           }
           const search = await fetch(`/api/products?q=${encodeURIComponent(code)}&limit=40`).then(res => res.json());
-          const nameMatch: Product | undefined = search.success
-            ? search.data.find((p: Product) => p.name.toLowerCase().includes(query))
-            : undefined;
+          const results: Product[] = search.success ? search.data : [];
+          // Word search can match several sizes; add only an exact name or a single result, else let the cashier pick
+          const nameMatch = results.find((p) => p.name.toLowerCase() === query) ?? (results.length === 1 ? results[0] : undefined);
           if (nameMatch) {
             addToCart(nameMatch);
+          } else if (results.length > 1) {
+            setSearchQuery((current) => current || code);
           } else {
             playBeep('error');
             setSearchQuery((current) => current || code);
@@ -483,9 +478,8 @@ export default function POSClient() {
   // Keyboard Shortcuts
   useKeyboardShortcuts({
     'F2': () => searchInputRef.current?.focus(),
-    'F4': () => handleToggleGrosir(),
     'F8': () => setIsMemberModalOpen(true),
-    'F9': () => { if (cart.length > 0) setIsPaymentModalOpen(true); },
+    'F9': () => openPayment(),
     'F10': () => handleOpenSummaryModal(),
     'Escape': () => {
       setIsMemberModalOpen(false);
@@ -529,7 +523,16 @@ export default function POSClient() {
 
   // Calculations
   const activeCartItems = cart.filter((item) => !item.isVoided);
-  const rawSubtotal = activeCartItems.reduce((sum, item) => sum + item.selectedPrice * item.quantity, 0);
+  // Line total after the per-pcs potongan, the same as the server's qty * (price - disc)
+  const lineTotal = (item: CartItem) => (item.selectedPrice - (item.discount || 0)) * item.quantity;
+  const rawSubtotal = activeCartItems.reduce((sum, item) => sum + lineTotal(item), 0);
+  const needsPin = isOverrideGrosir1 || manualDiscountValue > 0 || activeCartItems.some((item) => (item.discount || 0) > 0);
+  // A potongan restored from a reload has no PIN yet: ask for it before payment, the server rejects the sale without it
+  const openPayment = () => {
+    if (cart.length === 0) return;
+    if (needsPin) withPin('PIN Potongan / Override', () => setIsPaymentModalOpen(true));
+    else setIsPaymentModalOpen(true);
+  };
   
   const memberDiscountPercent = selectedCustomer ? selectedCustomer.discountPercent : 0;
   const memberDiscountAmount = Math.round((rawSubtotal * memberDiscountPercent) / 100);
@@ -604,7 +607,7 @@ export default function POSClient() {
     const receiptSnapshot = {
       cart: [...cart],
       cashPaid: finalCashPaid,
-      orderType: isOverrideGrosir1 ? 'Grosir (Override G1)' : (isGrosirMode ? 'Grosir' : 'Retail'),
+      orderType: isOverrideGrosir1 ? 'Grosir (Override G1)' : 'Retail',
       customer: selectedCustomer,
       paymentMethod: finalPaymentMethod as PaymentMethod,
       discountAmount: totalDiscount,
@@ -634,7 +637,7 @@ export default function POSClient() {
         cashPaid: finalCashPaid,
         isOverrideGrosir: isOverrideGrosir1,
         isOverrideGrosir1: isOverrideGrosir1,
-        isGrosirMode,
+        pin: needsPin ? authPin : undefined,
         customerId: selectedCustomer?.id || null,
         voucherCode: voucherCode.trim() || undefined,
         notes: '',
@@ -646,7 +649,7 @@ export default function POSClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...checkoutPayload,
-          mode: isGrosirMode ? 'Grosir' : 'Retail',
+          mode: isOverrideGrosir1 ? 'Grosir' : 'Retail',
           change: changeAmt,
           items: cart,
         }),
@@ -697,6 +700,7 @@ export default function POSClient() {
       setManualDiscountValue(0);
       setManualDiscountReason('');
       setIsOverrideGrosir1(false);
+      setAuthPin(null);
       fetchProducts(searchQuery);
 
       // The payment modal now shows "Payment Berhasil" and the change; its Finish button opens the receipt
@@ -726,6 +730,8 @@ export default function POSClient() {
       setCart([]);
       setManualDiscountValue(0);
       setManualDiscountReason('');
+      setIsOverrideGrosir1(false);
+      setAuthPin(null);
       setIsAlertOpen(false);
       setAlertConfirmFn(undefined);
     });
@@ -817,16 +823,7 @@ export default function POSClient() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-amber-600">
             <FileText className="w-4 h-4" />
-            <span className="font-bold">Mode {isGrosirMode ? 'Grosir' : 'Retail'}</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={handleToggleGrosir}
-              className={`cursor-pointer px-2.5 py-1 rounded-lg text-xs font-black transition-all ${isGrosirMode ? 'bg-amber-500 text-slate-950 shadow-sm' : 'bg-slate-300 text-slate-700'}`}
-            >
-              Grosir Auto
-            </button>
+            <span className="font-bold">Mode {isOverrideGrosir1 ? 'Grosir' : 'Retail'}</span>
           </div>
 
           {/* ⚡ OVERRIDE SEMUA KE GROSIR 1 TOGGLE */}
@@ -837,7 +834,7 @@ export default function POSClient() {
                 ? 'bg-amber-600 text-white ring-2 ring-amber-400 shadow-md animate-pulse'
                 : isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
             }`}
-            title="Override semua barang ke harga Grosir Tier 1 tanpa batas minimal qty"
+            title="Semua barang harga Grosir 1 (reseller), perlu PIN"
           >
             <Zap className="w-3.5 h-3.5" />
             <span>Override Grosir 1</span>
@@ -1060,11 +1057,23 @@ export default function POSClient() {
                             </button>
                           </div>
                         </td>
-                        <td className={`px-4 py-2.5 border-r text-right font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{item.selectedPrice.toLocaleString('id-ID')}</td>
-                        <td className={`px-4 py-2.5 border-r text-right font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{(item.selectedPrice * item.quantity).toLocaleString('id-ID')}</td>
+                        <td className={`px-4 py-2.5 border-r text-right font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>
+                          <div>{item.selectedPrice.toLocaleString('id-ID')}</div>
+                          {(item.discount || 0) > 0 && (
+                            <div className="text-[11px] text-rose-500 font-bold">Pot. -{(item.discount || 0).toLocaleString('id-ID')}</div>
+                          )}
+                        </td>
+                        <td className={`px-4 py-2.5 border-r text-right font-medium ${isDark ? 'border-slate-700 text-sky-400' : 'border-slate-200 text-sky-700'}`}>{lineTotal(item).toLocaleString('id-ID')}</td>
                         <td className="px-2 py-2.5 text-center">
                           <div className="flex items-center justify-center gap-1">
-                            <button 
+                            <button
+                              onClick={() => withPin('PIN Potongan per Barang', () => setDiscountItem(item))}
+                              className={`cursor-pointer p-1.5 rounded-md hover:bg-emerald-500/20 transition-colors ${(item.discount || 0) > 0 ? 'text-rose-500' : 'text-emerald-600'}`}
+                              title="Potongan per barang (perlu PIN)"
+                            >
+                              <Tag className="w-4 h-4" />
+                            </button>
+                            <button
                               onClick={() => setMemoItem(item)}
                               className="cursor-pointer p-1.5 rounded-md hover:bg-amber-500/20 text-amber-500 transition-colors"
                               title="Catatan / Memo Item"
@@ -1120,7 +1129,7 @@ export default function POSClient() {
                           </div>
                         )}
                       </td>
-                      <td className="py-1.5 pl-1 pr-2 text-right">{(item.selectedPrice * item.quantity).toLocaleString('id-ID')}</td>
+                      <td className="py-1.5 pl-1 pr-2 text-right">{lineTotal(item).toLocaleString('id-ID')}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1242,7 +1251,7 @@ export default function POSClient() {
                 Reprint Bill
               </button>
               <button 
-                onClick={() => setIsPaymentModalOpen(true)}
+                onClick={openPayment}
                 disabled={activeCartItems.length === 0 || !isManualDiscountValid}
                 className={`cursor-pointer flex-1 py-3 rounded text-sm font-semibold border flex justify-center items-center gap-2 shadow-sm transition-colors ${
                   activeCartItems.length > 0 && isManualDiscountValid
@@ -1300,6 +1309,21 @@ export default function POSClient() {
         onClose={() => setVoidItem(null)}
         onConfirmVoid={handleConfirmVoid}
       />
+      <PinModal
+        isOpen={!!pinRequest}
+        isDark={isDark}
+        title={pinRequest?.title || 'PIN Otorisasi'}
+        onClose={() => setPinRequest(null)}
+        onSuccess={(pin) => pinRequest?.onSuccess(pin)}
+      />
+      {discountItem && (
+        <ItemDiscountModal
+          isDark={isDark}
+          item={discountItem}
+          onClose={() => setDiscountItem(null)}
+          onSave={(discount) => handleSaveItemDiscount(discountItem, discount)}
+        />
+      )}
       <CashierSummaryModal
         isOpen={isSummaryModalOpen}
         isDark={isDark}
@@ -1347,7 +1371,7 @@ export default function POSClient() {
         storeInfo={posSettings}
         isDark={isDark}
         isReprint={!!lastReceiptData}
-        orderType={lastReceiptData?.orderType || (isGrosirMode ? 'Grosir' : 'Retail')}
+        orderType={lastReceiptData?.orderType || 'Retail'}
         customer={lastReceiptData?.customer}
         paymentMethod={lastReceiptData?.paymentMethod}
         discountAmount={lastReceiptData?.discountAmount}
