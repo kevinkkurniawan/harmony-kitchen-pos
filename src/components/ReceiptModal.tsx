@@ -3,6 +3,7 @@
 import React from 'react';
 import { Printer, X } from 'lucide-react';
 import { CartItem, Customer } from '@/types/pos';
+import { grosirSavingLabel, retailUnit, grossLine, grosirSaving, manualSaving } from '@/lib/receipt-lines';
 
 interface ReceiptModalProps {
   isOpen: boolean;
@@ -52,15 +53,7 @@ export default function ReceiptModal({
   const totalKinds = validCart.length;
   // Line total after the per-pcs potongan, as the server books it
   const lineTotal = (item: CartItem) => (item.selectedPrice - (item.discount || 0)) * item.quantity;
-  // Old receipt (Komplain Kasir #2): a grosir line prints the retail price and the grosir saving as its own
-  // "-- Potongan Diskon <tier>" row (old SP: 'Potongan Diskon ' + grosir tier), so the line starts at retail
-  const grosirTier = (item: CartItem) =>
-    item.priceType === 'override_grosir1' ? 1 : item.priceType.startsWith('grosir') ? Number(item.priceType.slice(-1)) : 0;
-  const retailUnit = (item: CartItem) =>
-    grosirTier(item) && item.product.priceRetail > item.selectedPrice ? item.product.priceRetail : item.selectedPrice;
-  const grosirSaving = (item: CartItem) => (retailUnit(item) - item.selectedPrice) * item.quantity;
-  const manualSaving = (item: CartItem) => (item.discount || 0) * item.quantity;
-  const grossLine = (item: CartItem) => retailUnit(item) * item.quantity;
+  // Grosir lines print the retail price and the saving as its own row (see receipt-lines)
   const money = (n: number) => Math.round(n).toLocaleString('en-US');
   const rawSubtotal = validCart.reduce((sum, item) => sum + lineTotal(item), 0);
   const grandTotal = Math.max(0, rawSubtotal - discountAmount) + taxAmount + serviceAmount;
@@ -104,7 +97,7 @@ export default function ReceiptModal({
       validCart.forEach(item => {
         str += `${item.product.name}\n`;
         str += row(`${item.quantity} x ${money(retailUnit(item))}`, money(grossLine(item)));
-        if (grosirSaving(item) > 0) str += row(`-- Potongan Diskon ${grosirTier(item)}`, `-${money(grosirSaving(item))}`);
+        if (grosirSaving(item) > 0) str += row(`-- ${grosirSavingLabel(item)}`, `-${money(grosirSaving(item))}`);
         if (manualSaving(item) > 0) str += row(`-- Potongan @ ${money(item.discount || 0)}`, `-${money(manualSaving(item))}`);
         if (item.memo) {
           str += ` * ${item.memo}\n`;
@@ -215,7 +208,7 @@ export default function ReceiptModal({
                     )}
                     {grosirSaving(item) > 0 && (
                       <div className="pl-6 flex justify-between text-[12px] text-[#1e40af]">
-                        <span>-- Potongan Diskon {grosirTier(item)}</span>
+                        <span>-- {grosirSavingLabel(item)}</span>
                         <span className="whitespace-nowrap">-{money(grosirSaving(item))}</span>
                       </div>
                     )}

@@ -32,6 +32,7 @@ import VoidReasonModal from '@/components/VoidReasonModal';
 import PinModal from '@/components/PinModal';
 import ItemDiscountModal from '@/components/ItemDiscountModal';
 import MemberValidationModal from '@/components/MemberValidationModal';
+import { grosirSavingLabel, retailUnit, grossLine, grosirSaving, manualSaving } from '@/lib/receipt-lines';
 import CashierSummaryModal from '@/components/CashierSummaryModal';
 import SettingsModal from '@/components/SettingsModal';
 import { PaymentModal } from '@/components/PaymentModal';
@@ -1148,19 +1149,35 @@ export default function POSClient() {
                   </tr>
                 </thead>
                 <tbody>
+                  {/* Same rows as the printed receipt (Luki, 23 Nov: the potongan must show before printing, like
+                      the old screen): retail price, then "-- Potongan Reseller / Diskon N" and manual potongan */}
                   {activeCartItems.map((item, idx) => (
-                    <tr key={idx} className="align-top">
-                      <td className="py-1.5 pl-2 pr-1 text-center">{item.quantity}</td>
-                      <td className="py-1.5 px-1 pr-2 leading-tight">
-                        <div>{item.product.name}</div>
-                        {item.priceType !== 'retail' && (
-                          <div className="text-[10px] text-amber-500 font-sans font-bold">
-                            [{item.priceType === 'override_grosir1' ? 'Override G1' : item.priceType}]
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-1.5 pl-1 pr-2 text-right">{lineTotal(item).toLocaleString('id-ID')}</td>
-                    </tr>
+                    <React.Fragment key={idx}>
+                      <tr className="align-top">
+                        <td className="pt-1.5 pl-2 pr-1 text-center">{item.quantity}</td>
+                        <td className="pt-1.5 px-1 pr-2 leading-tight">
+                          <div>{item.product.name}</div>
+                          {(item.quantity > 1 || grosirSaving(item) > 0 || manualSaving(item) > 0) && (
+                            <div className="text-[10px] opacity-70">@ {retailUnit(item).toLocaleString('id-ID')}</div>
+                          )}
+                        </td>
+                        <td className="pt-1.5 pl-1 pr-2 text-right">{grossLine(item).toLocaleString('id-ID')}</td>
+                      </tr>
+                      {grosirSaving(item) > 0 && (
+                        <tr className="text-amber-600">
+                          <td />
+                          <td className="px-1 text-[11px]">-- {grosirSavingLabel(item)}</td>
+                          <td className="pl-1 pr-2 text-right">-{grosirSaving(item).toLocaleString('id-ID')}</td>
+                        </tr>
+                      )}
+                      {manualSaving(item) > 0 && (
+                        <tr className="text-amber-600">
+                          <td />
+                          <td className="px-1 text-[11px]">-- Potongan @ {(item.discount || 0).toLocaleString('id-ID')}</td>
+                          <td className="pl-1 pr-2 text-right">-{manualSaving(item).toLocaleString('id-ID')}</td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
