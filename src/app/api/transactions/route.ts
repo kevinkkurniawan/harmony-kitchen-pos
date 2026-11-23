@@ -72,6 +72,7 @@ export async function POST(request: Request) {
       voucherCode,
       isOverrideGrosir,
       isOverrideGrosir1,
+      resellerName,
       total,
       paymentMethod,
       cashPaid,
@@ -87,6 +88,10 @@ export async function POST(request: Request) {
     const cashierName = sessionUser.name || sessionUser.username || 'Kasir';
 
     const overrideActive = Boolean(isOverrideGrosir || isOverrideGrosir1);
+    // Reseller name typed when Override Grosir 1 was switched on (old POS: CustomerName on the sale)
+    const customerName = overrideActive && typeof resellerName === 'string' && resellerName.trim()
+      ? resellerName.trim().slice(0, 50)
+      : null;
     const rawDiscountValue = Number(manualDiscountValue || manualDiscountAmount || 0);
 
     const hasItemDiscount = Array.isArray(items) && items.some((it: { isVoided?: boolean; discount?: unknown }) => !it.isVoided && Number(it.discount) > 0);
@@ -202,6 +207,7 @@ export async function POST(request: Request) {
           isdone: true,
           // Legacy meaning: the sale ran in reseller mode (everything at grosir 1)
           isgrosir: overrideActive,
+          customername: customerName,
           status: 'COMPLETED',
           isonline: false,
           isoverridegrosir: overrideActive,

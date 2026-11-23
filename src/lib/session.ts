@@ -2,7 +2,11 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { cookies } from 'next/headers';
 
 const COOKIE_NAME = 'pos_session';
-const MAX_AGE_SECONDS = 60 * 60 * 12; // 12 hours for POS shift
+// Client (Komplain Kasir #1): cashiers must not be sent back to the login mid-shift. The session slides: every
+// request renews it, so it only ends on Logout or after 7 days without any use.
+const MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+// Renew at most once an hour, so a busy till does not rewrite the cookie on every request
+const RENEW_AFTER_MS = 60 * 60 * 1000;
 
 export interface POSSessionUser {
   id: number;
@@ -31,14 +35,12 @@ export function inferPOSRole(username: string | null | undefined): POSSessionUse
 
 export async function createPOSSession(user: { id: number | string; username: string; name?: string; role?: string }) {
   const role = user.role === 'Admin' || user.role === 'Supervisor' ? user.role : inferPOSRole(user.username);
+  await writeSessionCookie({ id: Number(user.id), username: user.username, name: user.name || user.username, role });
+}
+
+async function writeSessionCookie(user: POSSessionUser) {
   const payload = Buffer.from(
-    JSON.stringify({
-      id: Number(user.id),
-      username: user.username,
-      name: user.name || user.username,
-      role,
-      expiresAt: Date.now() + MAX_AGE_SECONDS * 1000,
-    })
+    JSON.stringify({ ...user, expiresAt: Date.now() + MAX_AGE_SECONDS * 1000 })
   ).toString('base64url');
 
   const cookieStore = await cookies();
@@ -84,12 +86,18 @@ export async function getPOSCurrentUser(): Promise<POSSessionUser | null> {
       return null;
     }
 
-    return {
+    const user: POSSessionUser = {
       id: decoded.id,
       username: decoded.username,
       name: decoded.name || decoded.username,
       role: decoded.role || inferPOSRole(decoded.username),
     };
+    // Sliding expiry: push the end out again once the cookie is an hour old. Setting a cookie only works in a
+    // route handler; anywhere else the session simply keeps its current end.
+    if (decoded.expiresAt - Date.now() < MAX_AGE_SECONDS * 1000 - RENEW_AFTER_MS) {
+      await writeSessionCookie(user).catch(() => {});
+    }
+    return user;
   } catch {
     return null;
   }

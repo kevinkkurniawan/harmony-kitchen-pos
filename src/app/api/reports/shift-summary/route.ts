@@ -10,11 +10,11 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const cashierName = searchParams.get('cashierName') || 'Kasir';
 
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
+    // Today in store time (WIB): the server runs in UTC, where midnight is 07:00 WIB
+    const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const startOfDay = new Date(Math.floor((Date.now() + WIB_OFFSET_MS) / DAY_MS) * DAY_MS - WIB_OFFSET_MS);
+    const endOfDay = new Date(startOfDay.getTime() + DAY_MS - 1);
 
     const headers = await prisma.t_salesposheader.findMany({
       where: {
@@ -25,6 +25,7 @@ export async function GET(request: Request) {
         status: 'COMPLETED',
         createduser: cashierName !== 'Kasir' ? cashierName : undefined,
       },
+      orderBy: { createddate: 'asc' },
     });
 
     const headerIds = headers.map((h) => h.id);
@@ -93,6 +94,12 @@ export async function GET(request: Request) {
         taxCollected,
         serviceCollected,
         paymentBreakdown: breakdown,
+        // Old "Rekap Penjualan Harian" (Komplain Kasir #3): every nota of the day with its payment type
+        notes: headers.map((h) => ({
+          no: h.salesposno,
+          method: (h.paymenttypecode || 'CASH').toUpperCase(),
+          total: Number(h.grandtotal || 0),
+        })),
         expenses,
         cashToDeposit,
         cashInDrawer: breakdown.cash,

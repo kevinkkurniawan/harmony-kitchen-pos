@@ -19,6 +19,8 @@ interface ReceiptModalProps {
   serviceAmount?: number;
   /** ISO time of the sale, so reprints show when it was sold rather than now */
   saleDate?: string;
+  /** Override Grosir 1 sale: printed as "Reseller : <name>" like the old receipt */
+  resellerName?: string;
   notes?: string;
   isConnected?: boolean;
   onPrintText?: (text: string) => void;
@@ -40,6 +42,7 @@ export default function ReceiptModal({
   taxAmount = 0,
   serviceAmount = 0,
   saleDate,
+  resellerName,
   isConnected = false,
   onPrintText,
 }: ReceiptModalProps) {
@@ -49,6 +52,16 @@ export default function ReceiptModal({
   const totalKinds = validCart.length;
   // Line total after the per-pcs potongan, as the server books it
   const lineTotal = (item: CartItem) => (item.selectedPrice - (item.discount || 0)) * item.quantity;
+  // Old receipt (Komplain Kasir #2): a grosir line prints the retail price and the grosir saving as its own
+  // "-- Potongan Diskon <tier>" row (old SP: 'Potongan Diskon ' + grosir tier), so the line starts at retail
+  const grosirTier = (item: CartItem) =>
+    item.priceType === 'override_grosir1' ? 1 : item.priceType.startsWith('grosir') ? Number(item.priceType.slice(-1)) : 0;
+  const retailUnit = (item: CartItem) =>
+    grosirTier(item) && item.product.priceRetail > item.selectedPrice ? item.product.priceRetail : item.selectedPrice;
+  const grosirSaving = (item: CartItem) => (retailUnit(item) - item.selectedPrice) * item.quantity;
+  const manualSaving = (item: CartItem) => (item.discount || 0) * item.quantity;
+  const grossLine = (item: CartItem) => retailUnit(item) * item.quantity;
+  const money = (n: number) => Math.round(n).toLocaleString('en-US');
   const rawSubtotal = validCart.reduce((sum, item) => sum + lineTotal(item), 0);
   const grandTotal = Math.max(0, rawSubtotal - discountAmount) + taxAmount + serviceAmount;
   const change = Math.max(0, cashPaid - grandTotal);
@@ -83,17 +96,16 @@ export default function ReceiptModal({
       str += '--------------------------------\n' + LEFT;
       str += `No: ${invoiceNo}\n`;
       str += `${dateStr} ${timeStr}\nKsr: ${cashierName}\n`;
+      if (resellerName) str += `Reseller : ${resellerName}\n`;
       str += '--------------------------------\n';
       
+      // Pad to right-align an amount on the 32-column paper
+      const row = (left: string, amount: string) => left + ' '.repeat(Math.max(1, 32 - left.length - amount.length)) + amount + '\n';
       validCart.forEach(item => {
-        const totalStr = Math.round(lineTotal(item)).toLocaleString('en-US');
         str += `${item.product.name}\n`;
-        const leftPart = `${item.quantity} x ${Math.round(item.selectedPrice).toLocaleString('en-US')}`;
-        // Pad to right-align the line total on the 32-column paper
-        str += leftPart + ' '.repeat(Math.max(1, 32 - leftPart.length - totalStr.length)) + totalStr + '\n';
-        if (item.discount) {
-          str += ` Potongan @ ${Math.round(item.discount).toLocaleString('en-US')}\n`;
-        }
+        str += row(`${item.quantity} x ${money(retailUnit(item))}`, money(grossLine(item)));
+        if (grosirSaving(item) > 0) str += row(`-- Potongan Diskon ${grosirTier(item)}`, `-${money(grosirSaving(item))}`);
+        if (manualSaving(item) > 0) str += row(`-- Potongan @ ${money(item.discount || 0)}`, `-${money(manualSaving(item))}`);
         if (item.memo) {
           str += ` * ${item.memo}\n`;
         }
@@ -171,6 +183,7 @@ export default function ReceiptModal({
               <span>{timeStr}</span>
               <span>Ksr : {cashierName}</span>
             </div>
+            {resellerName && <div className="text-[13px] text-left text-[#1e40af]">Reseller : {resellerName}</div>}
 
             {/* Items Header */}
             <div className="pt-2 pb-1 text-[13px] font-bold flex text-[#1e40af]">
@@ -194,13 +207,22 @@ export default function ReceiptModal({
                         {item.product.name}
                       </span>
                       <span className="whitespace-nowrap font-bold text-right shrink-0">
-                        {Math.round(lineTotal(item)).toLocaleString('en-US')}
+                        {money(grossLine(item))}
                       </span>
                     </div>
-                    {(item.quantity > 1 || !!item.discount) && (
-                      <div className="pl-6 text-[#1e40af] text-[12px]">
-                        @ {Math.round(item.selectedPrice).toLocaleString('en-US')}
-                        {!!item.discount && ` - Pot. ${Math.round(item.discount).toLocaleString('en-US')}`}
+                    {(item.quantity > 1 || grosirSaving(item) > 0 || manualSaving(item) > 0) && (
+                      <div className="pl-6 text-[#1e40af] text-[12px]">@ {money(retailUnit(item))}</div>
+                    )}
+                    {grosirSaving(item) > 0 && (
+                      <div className="pl-6 flex justify-between text-[12px] text-[#1e40af]">
+                        <span>-- Potongan Diskon {grosirTier(item)}</span>
+                        <span className="whitespace-nowrap">-{money(grosirSaving(item))}</span>
+                      </div>
+                    )}
+                    {manualSaving(item) > 0 && (
+                      <div className="pl-6 flex justify-between text-[12px] text-[#1e40af]">
+                        <span>-- Potongan @ {money(item.discount || 0)}</span>
+                        <span className="whitespace-nowrap">-{money(manualSaving(item))}</span>
                       </div>
                     )}
                     {item.memo && (

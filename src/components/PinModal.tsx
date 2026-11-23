@@ -7,14 +7,17 @@ interface PinModalProps {
   isOpen: boolean;
   isDark: boolean;
   title: string;
+  /** Override Grosir 1: the old POS also asked the reseller's name (min 3 characters) with the PIN */
+  askName?: boolean;
   onClose: () => void;
-  /** Called with the PIN once the server accepts it */
-  onSuccess: (pin: string) => void;
+  /** Called with the PIN (and the name when asked) once the server accepts it */
+  onSuccess: (pin: string, name: string) => void;
 }
 
 // Shared PIN prompt (legacy POS passcode) for Override Grosir 1 and manual discounts
-export default function PinModal({ isOpen, isDark, title, onClose, onSuccess }: PinModalProps) {
+export default function PinModal({ isOpen, isDark, title, askName = false, onClose, onSuccess }: PinModalProps) {
   const [pin, setPin] = useState('');
+  const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [isChecking, setIsChecking] = useState(false);
 
@@ -22,12 +25,17 @@ export default function PinModal({ isOpen, isDark, title, onClose, onSuccess }: 
 
   const close = () => {
     setPin('');
+    setName('');
     setError('');
     onClose();
   };
 
   const submit = async () => {
     if (!pin.trim() || isChecking) return;
+    if (askName && name.trim().length < 3) {
+      setError('Nama reseller minimal 3 huruf.');
+      return;
+    }
     setIsChecking(true);
     setError('');
     try {
@@ -38,8 +46,10 @@ export default function PinModal({ isOpen, isDark, title, onClose, onSuccess }: 
       });
       if (res.ok) {
         const accepted = pin;
+        const acceptedName = name.trim();
         setPin('');
-        onSuccess(accepted);
+        setName('');
+        onSuccess(accepted, acceptedName);
       } else {
         setError(res.status === 401 ? 'Sesi kasir berakhir, silakan login kembali.' : 'PIN salah.');
       }
@@ -63,11 +73,26 @@ export default function PinModal({ isOpen, isDark, title, onClose, onSuccess }: 
           </button>
         </div>
         <div className="p-5">
+          {askName && (
+            <>
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 block">Nama Reseller</label>
+              <input
+                type="text"
+                autoFocus
+                maxLength={50}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Escape') close(); }}
+                placeholder="Nama reseller"
+                className={`w-full mb-4 p-3 rounded-xl text-base border outline-none ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} focus:border-amber-500`}
+              />
+            </>
+          )}
           <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 block">PIN Otorisasi</label>
           <input
             type="password"
             inputMode="numeric"
-            autoFocus
+            autoFocus={!askName}
             maxLength={20}
             value={pin}
             onChange={(e) => setPin(e.target.value)}
@@ -81,7 +106,7 @@ export default function PinModal({ isOpen, isDark, title, onClose, onSuccess }: 
           <button onClick={close} className="cursor-pointer px-4 py-2 rounded-xl text-sm text-slate-500 hover:bg-slate-200/60">Batal</button>
           <button
             onClick={submit}
-            disabled={!pin.trim() || isChecking}
+            disabled={!pin.trim() || (askName && name.trim().length < 3) || isChecking}
             className="cursor-pointer px-5 py-2 rounded-xl font-bold text-sm bg-amber-500 hover:bg-amber-400 text-slate-950 disabled:opacity-50"
           >
             {isChecking ? 'Memeriksa...' : 'Buka'}

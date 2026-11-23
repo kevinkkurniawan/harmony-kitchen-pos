@@ -54,7 +54,9 @@ export default function POSClient() {
   const [isOverrideGrosir1, setIsOverrideGrosir1] = useState(false);
   // PIN accepted for the current sale: unlocks Override Grosir 1 and manual discounts, cleared when the sale ends
   const [authPin, setAuthPin] = useState<string | null>(null);
-  const [pinRequest, setPinRequest] = useState<{ title: string; onSuccess: (pin: string) => void } | null>(null);
+  const [pinRequest, setPinRequest] = useState<{ title: string; askName?: boolean; onSuccess: (pin: string, name: string) => void } | null>(null);
+  // Reseller name asked when Override Grosir 1 is switched on; saved on the sale and printed on the receipt
+  const [resellerName, setResellerName] = useState('');
   const [discountItem, setDiscountItem] = useState<CartItem | null>(null);
 
   // Manual Invoice Discount State
@@ -123,6 +125,7 @@ export default function POSClient() {
     taxAmount: number;
     serviceAmount: number;
     saleDate: string;
+    resellerName?: string;
   } | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -287,8 +290,22 @@ export default function POSClient() {
       setIsOverrideGrosir1(next);
       applyPricingToCart(next);
     };
-    if (isOverrideGrosir1) apply(false);
-    else withPin('PIN Override Grosir 1', () => apply(true));
+    if (isOverrideGrosir1) {
+      apply(false);
+      setResellerName('');
+      return;
+    }
+    // Like the old POS, switching on always asks the reseller's name together with the PIN
+    setPinRequest({
+      title: 'Override Grosir 1',
+      askName: true,
+      onSuccess: (pin, name) => {
+        setAuthPin(pin);
+        setResellerName(name);
+        setPinRequest(null);
+        apply(true);
+      },
+    });
   };
 
   const handleSaveItemDiscount = (target: CartItem, discount: number) => {
@@ -556,7 +573,7 @@ export default function POSClient() {
   const grandTotal = afterDiscount + taxAmount + serviceAmount;
 
   // Checkout Handler
-  // The saved user in localStorage can outlive the 12h server session: verify it,
+  // The saved user in localStorage can outlive the server session (7 days unused): verify it,
   // and load tax/service rates, which are set on the server.
   useEffect(() => {
     if (!isInitialized || !currentUser) return;
@@ -609,6 +626,7 @@ export default function POSClient() {
       cashPaid: finalCashPaid,
       orderType: isOverrideGrosir1 ? 'Grosir (Override G1)' : 'Retail',
       customer: selectedCustomer,
+      resellerName: isOverrideGrosir1 ? resellerName : '',
       paymentMethod: finalPaymentMethod as PaymentMethod,
       discountAmount: totalDiscount,
       taxAmount,
@@ -637,6 +655,7 @@ export default function POSClient() {
         cashPaid: finalCashPaid,
         isOverrideGrosir: isOverrideGrosir1,
         isOverrideGrosir1: isOverrideGrosir1,
+        resellerName: isOverrideGrosir1 ? resellerName : undefined,
         pin: needsPin ? authPin : undefined,
         customerId: selectedCustomer?.id || null,
         voucherCode: voucherCode.trim() || undefined,
@@ -700,6 +719,7 @@ export default function POSClient() {
       setManualDiscountValue(0);
       setManualDiscountReason('');
       setIsOverrideGrosir1(false);
+      setResellerName('');
       setAuthPin(null);
       fetchProducts(searchQuery);
 
@@ -731,6 +751,7 @@ export default function POSClient() {
       setManualDiscountValue(0);
       setManualDiscountReason('');
       setIsOverrideGrosir1(false);
+      setResellerName('');
       setAuthPin(null);
       setIsAlertOpen(false);
       setAlertConfirmFn(undefined);
@@ -910,7 +931,7 @@ export default function POSClient() {
                 <span>No. Transaksi <span className="text-amber-600 ml-1">{activeTransactionNo || 'New Transaction'}</span></span>
                 {isOverrideGrosir1 && (
                   <span className="px-2 py-0.5 rounded bg-amber-500 text-slate-950 text-[10px] font-black">
-                    OVERRIDE GROSIR 1 AKTIF
+                    OVERRIDE GROSIR 1 AKTIF{resellerName && ` · ${resellerName}`}
                   </span>
                 )}
               </div>
@@ -941,7 +962,7 @@ export default function POSClient() {
 
                   {/* Search Results Dropdown */}
                   {searchQuery.trim().length > 0 && products.length > 0 && (
-                    <div className={`absolute top-full left-0 mt-1 w-96 rounded-xl border shadow-2xl z-40 max-h-60 overflow-y-auto ${isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'}`}>
+                    <div className={`absolute top-full left-0 mt-1 w-[28rem] max-w-[calc(100vw-2rem)] rounded-xl border shadow-2xl z-40 max-h-72 overflow-y-auto ${isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'}`}>
                       {products.map((p) => (
                         <div
                           key={p.id}
@@ -949,16 +970,25 @@ export default function POSClient() {
                             addToCart(p);
                             setSearchQuery('');
                           }}
-                          className={`p-2.5 border-b last:border-b-0 cursor-pointer flex justify-between items-center transition-colors ${
+                          className={`p-2.5 border-b last:border-b-0 cursor-pointer flex justify-between items-center gap-3 transition-colors ${
                             isDark ? 'border-slate-800 hover:bg-slate-800' : 'border-slate-100 hover:bg-slate-100'
                           }`}
                         >
-                          <div>
+                          <div className="min-w-0">
                             <div className="font-bold text-xs">{p.name}</div>
                             <div className="text-[10px] text-slate-400 font-mono">{p.barcode} • Stok: {p.stock}</div>
                           </div>
-                          <div className="text-xs font-bold text-emerald-600 font-mono">
-                            Rp {p.priceRetail.toLocaleString('id-ID')}
+                          {/* Grosir 1-3 under the retail price, like the old item lookup grid (Komplain Kasir #4) */}
+                          <div className="shrink-0 text-right font-mono">
+                            <div className="text-xs font-bold text-emerald-600">Rp {p.priceRetail.toLocaleString('id-ID')}</div>
+                            {[p.priceGrosir1, p.priceGrosir2, p.priceGrosir3].some((g) => g > 0) && (
+                              <div className={`text-[10px] whitespace-nowrap ${isDark ? 'text-amber-300' : 'text-amber-700'}`}>
+                                {[p.priceGrosir1, p.priceGrosir2, p.priceGrosir3]
+                                  .map((g, i) => (g > 0 ? `G${i + 1} ${g.toLocaleString('id-ID')}` : null))
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -1313,8 +1343,9 @@ export default function POSClient() {
         isOpen={!!pinRequest}
         isDark={isDark}
         title={pinRequest?.title || 'PIN Otorisasi'}
+        askName={pinRequest?.askName}
         onClose={() => setPinRequest(null)}
-        onSuccess={(pin) => pinRequest?.onSuccess(pin)}
+        onSuccess={(pin, name) => pinRequest?.onSuccess(pin, name)}
       />
       {discountItem && (
         <ItemDiscountModal
@@ -1378,6 +1409,7 @@ export default function POSClient() {
         taxAmount={lastReceiptData?.taxAmount}
         serviceAmount={lastReceiptData?.serviceAmount}
         saleDate={lastReceiptData?.saleDate}
+        resellerName={lastReceiptData?.resellerName}
         isConnected={isConnected}
         onPrintText={printText}
       />

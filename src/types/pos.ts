@@ -91,4 +91,6 @@ export interface ShiftSummary {
   cashInDrawer: number;
   voidCount: number;
   voidTotalAmount: number;
+  /** The day's notes, for the per-payment list (old Rekap Penjualan Harian) */
+  notes?: { no: string; method: string; total: number }[];
 }

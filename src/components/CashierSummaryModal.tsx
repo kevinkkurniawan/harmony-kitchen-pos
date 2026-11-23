@@ -28,6 +28,19 @@ export default function CashierSummaryModal({
 
   const formatMoney = (val: number) => Math.round(val).toLocaleString('id-ID');
   
+  // Old "Rekap Penjualan Harian": the day's notes grouped by payment type (sorted by its name, like the old
+  // report), each group with its count and total; CASH is "Tunai" as in the old app
+  const methodLabel = (method: string) => (method === 'CASH' ? 'Tunai' : method);
+  const noteGroups = [...(summary.notes || []).reduce((groups, note) => {
+    const label = methodLabel(note.method);
+    groups.set(label, [...(groups.get(label) || []), note]);
+    return groups;
+  }, new Map<string, { no: string; method: string; total: number }[]>())]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([label, notes]) => ({ label, notes, total: notes.reduce((sum, n) => sum + n.total, 0) }));
+  const notesTotal = noteGroups.reduce((sum, g) => sum + g.total, 0);
+  const printedAt = new Date().toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+
   const currentDate = new Date();
   const dateStr = `${currentDate.getDate().toString().padStart(2, '0')}/${(currentDate.getMonth() + 1).toString().padStart(2, '0')}/${currentDate.getFullYear()}`;
 
@@ -69,6 +82,19 @@ export default function CashierSummaryModal({
       
       str += '--------------------------------\n';
       str += BOLD_ON + formatLine('SETOR', formatMoney(summary.cashToDeposit)) + BOLD_OFF;
+
+      if (noteGroups.length > 0) {
+        str += '\n' + CENTER + BOLD_ON + 'REKAP PENJUALAN HARIAN\n' + BOLD_OFF + dateStr + '\n' + LEFT;
+        str += '--------------------------------\n';
+        for (const group of noteGroups) {
+          str += BOLD_ON + `Pembayaran : ${group.label} -> ${group.notes.length} Nota\n` + BOLD_OFF;
+          for (const note of group.notes) str += formatLine(` - ${note.no}`, formatMoney(note.total));
+          str += BOLD_ON + formatLine('Total :', formatMoney(group.total)) + BOLD_OFF;
+          str += '--------------------------------\n';
+        }
+        str += BOLD_ON + formatLine('Total Omset :', formatMoney(notesTotal)) + BOLD_OFF;
+        str += `Dicetak : ${cashierName}  ${printedAt}\n`;
+      }
       
       str += '\n\n' + CUT;
       onPrintText(str);
@@ -176,6 +202,41 @@ export default function CashierSummaryModal({
               <div className="flex justify-between font-extrabold text-sm uppercase text-blue-900">
                 <span>SETOR</span>
                 <span>{formatMoney(summary.cashToDeposit)}</span>
+              </div>
+            </div>
+
+            {/* Rekap Penjualan Harian: every nota of the day per payment type (Komplain Kasir #3) */}
+            <div className="mt-3 pt-2 border-t-2 border-blue-600 space-y-2">
+              <div className="text-center font-bold uppercase text-blue-900">
+                Rekap Penjualan Harian
+                <div className="font-normal normal-case">{dateStr}</div>
+              </div>
+              {noteGroups.length === 0 ? (
+                <div className="text-center text-blue-900/70 italic">Belum ada transaksi hari ini.</div>
+              ) : (
+                noteGroups.map((group) => (
+                  <div key={group.label} className="pb-2 border-b border-dashed border-blue-400 text-blue-900">
+                    <div className="font-bold">Pembayaran : {group.label} ➟ {group.notes.length} Nota</div>
+                    {group.notes.map((note) => (
+                      <div key={note.no} className="flex justify-between pl-2">
+                        <span>• {note.no}</span>
+                        <span>{formatMoney(note.total)}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between font-bold pl-8">
+                      <span>Total :</span>
+                      <span>{formatMoney(group.total)}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+              <div className="flex justify-between font-extrabold text-sm text-blue-900">
+                <span>Total Omset :</span>
+                <span>{formatMoney(notesTotal)}</span>
+              </div>
+              <div className="flex justify-between text-[11px] text-blue-900">
+                <span>Dicetak : {currentUser?.name || summary.cashierName || 'KASIR'}</span>
+                <span>{printedAt}</span>
               </div>
             </div>
           </div>
